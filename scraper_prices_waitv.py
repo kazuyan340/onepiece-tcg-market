@@ -1,14 +1,12 @@
-"""カードラボからワンピースカードゲームの価格を取得し price_history に保存するモジュール。
+"""カードショップわいTV(cardshop-waitv.net)からワンピースカードゲームの価格を
+取得し price_history に保存するモジュール。
 
-カードラボの検索結果には goods_name というクラスの要素に
-"【OP】{カード名}【{レアリティ}】{カード番号}" という形式でカード番号が
-そのまま残っている(名探偵コナンTCGの"【CTCG】...[card_num]"とは末尾の
-括弧の有無が違う)。キーワード「OP」1つで全カードを横断検索できる。
-
-パラレル("R/SP"のようにレアリティにスラッシュ区切りで付与される)は、公式サイトの
-カードデータ側でも同じカード番号・同じレアリティの複数印刷が存在し、絵違いまでは
-区別できないため、同じ(card_num, レアリティ)を持つDB行が複数あった場合は
-通常版(id が card_num と一致する行)を代表として価格を紐付ける。
+`/product-list/1` がワンピースカード専用カテゴリになっている。商品名は
+「{カード名}（{パック略称} {カード番号} {レアリティ}） 状態{状態ランク}」という
+形式(例: "ロックス・D・ジーベック（OP-17 OP17-118 SEC） 状態A-")で、全角括弧の
+中身を空白区切りで見ると、パック略称(例: "OP-17")・カード番号(例: "OP17-118")・
+レアリティ(例: "SEC")の3トークンになっている。同じカードでも状態(状態A/状態A-等)
+違いで複数出品されるが、状態の違いは区別せずまとめて最安値を採用する。
 """
 import logging
 import re
@@ -22,8 +20,7 @@ from bs4 import BeautifulSoup
 import db
 import price_matching
 
-SEARCH_URL = "https://www.c-labo-online.jp/product-list/"
-KEYWORD = "OP"
+BASE_URL = "https://www.cardshop-waitv.net/product-list/1"
 PAGE_SIZE = 120
 
 HEADERS = {
@@ -34,26 +31,42 @@ HEADERS = {
 
 REQUEST_TIMEOUT = 15
 REQUEST_DELAY_SEC = 30
-MAX_PAGES = 80  # 安全のための上限(実際の最終ページはparse_total_countから算出)
+MAX_PAGES = 30
 
-# 例: "【OP】BB【C】OP08-035" / "【OP】お菊【R/SP】(OP07収録)OP01-105"
-#     "【OP】ロロノア・ゾロ[25周年エディション]【L】(PRカード)OP01-001(1)"
-NAME_PATTERN = re.compile(
-    r"^【OP】.*?【([^】]+)】(?:\([^)]*\))?([A-Za-z]{1,4}\d{1,3}-\d{1,3})"
-)
+PAREN_CONTENT = re.compile(r"（([^（）]*)）")
+CARD_NUM_PATTERN = re.compile(r"^([A-Z]{1,3}\d{1,2}-\d{3}|P-\d{3})$")
+PACK_CODE_PATTERN = re.compile(r"^[A-Z]{1,3}-\d{1,2}$")
 
 logger = logging.getLogger(__name__)
 
 
-def fetch_search_page(page: int) -> str:
-    params = {"keyword": KEYWORD, "num": PAGE_SIZE, "page": page}
-    resp = requests.get(SEARCH_URL, params=params, headers=HEADERS, timeout=REQUEST_TIMEOUT)
+def fetch_page(page: int) -> str:
+    params = {"num": PAGE_SIZE, "page": page}
+    resp = requests.get(BASE_URL, params=params, headers=HEADERS, timeout=REQUEST_TIMEOUT)
     resp.raise_for_status()
     return resp.text
 
 
-def parse_items(html: str) -> list[tuple[str, str, int | None]]:
-    """(card_num, rarity, price) のリストを返す。在庫切れの場合はpriceがNoneになる。"""
+def _parse_name(name_text: str) -> tuple[str | None, str | None]:
+    """商品名から(card_num, rarity)を取り出す。括弧内のトークンのうち、カード番号の
+    形をしたものをcard_num、パック略称(例:"OP-17")でもcard_numでもないものをrarityとする。
+    """
+    m = PAREN_CONTENT.search(name_text)
+    if not m:
+        return None, None
+    card_num = None
+    rarity = None
+    for token in m.group(1).split():
+        if CARD_NUM_PATTERN.match(token):
+            card_num = token
+        elif not PACK_CODE_PATTERN.match(token):
+            rarity = token
+    return card_num, rarity
+
+
+def parse_items(html: str) -> list[tuple[str, str | None, int]]:
+    """(card_num, rarity, price) のリストを返す(在庫切れ商品はページに表示されないため
+    在庫切れの区別は不要)。"""
     soup = BeautifulSoup(html, "html.parser")
     results = []
     for li in soup.select("li.list_item_cell"):
@@ -61,20 +74,14 @@ def parse_items(html: str) -> list[tuple[str, str, int | None]]:
         if not name_el:
             continue
 
-        m = NAME_PATTERN.match(name_el.get_text())
-        if not m:
-            continue
-        rarity, card_num = m.group(1), m.group(2)
-
-        if "list_item_soldout" in (li.get("class") or []):
-            results.append((card_num, rarity, None))
+        card_num, rarity = _parse_name(name_el.get_text())
+        if not card_num:
             continue
 
         price_el = li.select_one(".price .figure")
         if not price_el:
             continue
-
-        price_text = price_el.get_text().split("円")[0].replace(",", "").strip()
+        price_text = price_el.get_text().replace("¥", "").replace(",", "").strip()
         try:
             price = int(price_text)
         except ValueError:
@@ -93,7 +100,7 @@ def parse_total_count(html: str) -> int:
 
 
 def sync_prices(conn=None, delay: float = REQUEST_DELAY_SEC, progress_callback=None) -> dict:
-    """ワンピースカードゲームの価格をカードラボから取得し price_history に保存する。
+    """わいTVからワンピースカードの価格を取得し price_history に保存する。
 
     progress_callback(page, last_page, matched_count) が指定されていれば
     ページ取得のたびに呼び出す。
@@ -117,9 +124,9 @@ def sync_prices(conn=None, delay: float = REQUEST_DELAY_SEC, progress_callback=N
             first_request = False
 
             try:
-                html = fetch_search_page(page)
+                html = fetch_page(page)
             except requests.RequestException as exc:
-                logger.warning("カードラボの取得に失敗 (page=%d): %s", page, exc)
+                logger.warning("わいTVの取得に失敗 (page=%d): %s", page, exc)
                 break
 
             if page == 1:
@@ -127,9 +134,10 @@ def sync_prices(conn=None, delay: float = REQUEST_DELAY_SEC, progress_callback=N
                 last_page = max(1, -(-total // PAGE_SIZE))  # 切り上げ除算
 
             for card_num, rarity, price in parse_items(html):
-                if price is None:
-                    continue
-                card_id = price_matching.pick_card_id(card_num, lookup, rarity)
+                # わいTVは「P-SR」のようにパラレル表記にP-を前置するが、DB側の
+                # rarityはこの前置詞を持たないため、マッチング時だけ取り除く。
+                normalized_rarity = rarity[2:] if rarity and rarity.startswith("P-") else rarity
+                card_id = price_matching.pick_card_id(card_num, lookup, normalized_rarity)
                 if card_id is None:
                     unmatched_count += 1
                     continue
@@ -143,7 +151,7 @@ def sync_prices(conn=None, delay: float = REQUEST_DELAY_SEC, progress_callback=N
         run_recorded_at = datetime.now(timezone.utc).isoformat()
         for card_id, prices in all_prices.items():
             db.insert_price(
-                conn, card_id, "カードラボ", min(prices),
+                conn, card_id, "わいTV", min(prices),
                 recorded_at=run_recorded_at, sample_count=len(prices),
             )
 

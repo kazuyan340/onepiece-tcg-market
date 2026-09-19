@@ -97,6 +97,36 @@
     return `<div class="info-row"><span class="info-label">${label}</span><span class="info-value">${value}</span></div>`;
   }
 
+  // 駿河屋アフィリエイト(Smart Biz Affiliate)のリンク生成。
+  // user_id=固定のアフィリエイターID、goods_url=転送先URLをエンコードしたもの、という
+  // 仕組みなので、カードごとの検索結果URLを組み立てて渡せば全カード分を自動生成できる。
+  const SURUGAYA_AFFILIATE_USER_ID = "5367";
+
+  function surugaSearchUrl(cardNum) {
+    const query = `ワンピースカードゲーム ${cardNum}`;
+    return `https://www.suruga-ya.jp/search?category=&search_word=${encodeURIComponent(query)}`;
+  }
+
+  function surugaAffiliateUrl(cardNum) {
+    const target = surugaSearchUrl(cardNum);
+    return `https://affiliate.suruga-ya.jp/modules/af/af_jump.php?user_id=${SURUGAYA_AFFILIATE_USER_ID}&goods_url=${encodeURIComponent(target)}`;
+  }
+
+  // 駿河屋以外はアフィリエイト提携が無いため、素の検索ページへのリンクのみ設置する
+  // (金銭的な結びつきが無いことを景表法上も正しく反映するため「PR」表記は付けない)。
+  const SHOP_LINK_BUILDERS = {
+    "駿河屋": (cardNum) => surugaAffiliateUrl(cardNum),
+    "カードラボ": (cardNum) => `https://www.c-labo-online.jp/product-list/?keyword=${encodeURIComponent(cardNum)}`,
+    "まんぞく屋": (cardNum) => `https://shopmanzokuya.com/products/list?category_id=2636&name=${encodeURIComponent(cardNum)}`,
+    "わいTV": (cardNum) => `https://www.cardshop-waitv.net/product-list/1?keyword=${encodeURIComponent(cardNum)}`,
+    "カードラッシュ": (cardNum) => `https://www.cardrush-op.jp/product-list?keyword=${encodeURIComponent(cardNum)}`,
+  };
+
+  function shopLinkUrl(site, cardNum) {
+    const builder = SHOP_LINK_BUILDERS[site];
+    return builder ? builder(cardNum) : null;
+  }
+
   function priceSection(card) {
     const priceInfo = pricesLatest[card.id];
     if (!priceInfo) {
@@ -106,12 +136,18 @@
     const shopRows = priceInfo.shops
       .slice()
       .sort((a, b) => a.price - b.price)
-      .map((shop) => `
-        <div class="price-shop-row">
-          <span>${shop.site}</span>
-          <span>¥${shop.price.toLocaleString()} (${shop.sample_count}件の出品中最安値)</span>
-        </div>
-      `).join("");
+      .map((shop) => {
+        const url = shopLinkUrl(shop.site, card.card_num);
+        const shopLabel = url
+          ? `<a href="${url}" target="_blank" rel="noopener">${shop.site}</a>`
+          : shop.site;
+        return `
+          <div class="price-shop-row">
+            <span>${shopLabel}</span>
+            <span>¥${shop.price.toLocaleString()} (${shop.sample_count}件の出品中最安値)</span>
+          </div>
+        `;
+      }).join("");
     return `
       <div class="info-block price-block">
         <h3>相場(最終取得: ${updatedAt})</h3>

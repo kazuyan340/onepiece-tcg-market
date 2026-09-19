@@ -184,6 +184,15 @@ body {
   border-bottom: 1px dashed var(--border);
 }
 
+.price-shop-row a {
+  color: #7fd4ff;
+  text-decoration: none;
+}
+
+.price-shop-row a:hover {
+  text-decoration: underline;
+}
+
 .price-empty {
   color: var(--text-dim);
   font-size: 0.85rem;

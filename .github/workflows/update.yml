@@ -11,9 +11,59 @@ permissions:
   contents: write
 
 jobs:
-  update:
+  # 駿河屋はGitHub Actionsのクラウド(データセンター)IPを403でブロックすることが
+  # conan-tcg-marketでの運用で判明しているため、このジョブだけ通常回線を持つ
+  # セルフホストランナー(自分のPC)で実行する。
+  fetch_surugaya:
+    runs-on: [self-hosted, self-hosted-onepiece]
+    timeout-minutes: 90
+    env:
+      # セルフホストランナーはNETWORK SERVICEアカウントで動作しており、個人用インストール
+      # (ユーザープロファイル配下)だとアクセスできずpip installが失敗するため、
+      # 全ユーザー向けインストールのフルパスを直接指定する(conan-tcg-marketと同じ対処)。
+      PYTHON: C:\Program Files\Python312\python.exe
+      PYTHONIOENCODING: utf-8
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: '& "${{ env.PYTHON }}" -m pip install -r requirements.txt'
+
+      - name: Restore price/card database
+        id: db_restore
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $gh = "C:\Program Files\GitHub CLI\gh.exe"
+          if (-not (Test-Path $gh)) { $gh = "gh" }
+          New-Item -ItemType Directory -Force -Path data | Out-Null
+          & $gh release download db-store --repo ${{ github.repository }} --pattern onepiece_tcg.db --dir data --clobber
+          if ($LASTEXITCODE -eq 0) {
+            echo "found=true" >> $env:GITHUB_OUTPUT
+          } else {
+            echo "found=false" >> $env:GITHUB_OUTPUT
+            Write-Host "db-store release asset not found yet (expected on first run)."
+          }
+          exit 0
+        shell: powershell
+
+      - name: Sync card list (diff update)
+        run: '& "${{ env.PYTHON }}" scraper_cards.py'
+
+      - name: Fetch prices from Suruga-ya
+        run: '& "${{ env.PYTHON }}" scraper_prices_surugaya.py'
+
+      - name: Hand off database to the next job
+        uses: actions/upload-artifact@v4
+        with:
+          name: onepiece-tcg-db
+          path: data/onepiece_tcg.db
+          retention-days: 1
+
+  fetch_others_and_publish:
+    needs: fetch_surugaya
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 150
     env:
       PYTHONIOENCODING: utf-8
     steps:
@@ -26,27 +76,23 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      # cards/price_historyを蓄積したDBはリポジトリにコミットせず(サイズが大きく
-      # 差分もほぼ全行になるため)、固定名のGitHub Releaseアセットに保存して
-      # 実行のたびに読み書きする。初回(このリリースを作る前)は無くて構わない。
-      - name: Restore price/card database
-        id: db_restore
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          mkdir -p data
-          if gh release download db-store --repo ${{ github.repository }} --pattern onepiece_tcg.db --dir data --clobber; then
-            echo "found=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "found=false" >> "$GITHUB_OUTPUT"
-            echo "db-store release asset not found yet (expected on first run)."
-          fi
-
-      - name: Sync card list (diff update)
-        run: python scraper_cards.py
+      - name: Receive database from the Suruga-ya job
+        uses: actions/download-artifact@v4
+        with:
+          name: onepiece-tcg-db
+          path: data
 
       - name: Fetch prices from Card Labo
         run: python scraper_prices_cardlabo.py
+
+      - name: Fetch prices from Manzokuya
+        run: python scraper_prices_manzokuya.py
+
+      - name: Fetch prices from Card Shop WaiTV
+        run: python scraper_prices_waitv.py
+
+      - name: Fetch prices from Cardrush
+        run: python scraper_prices_cardrush.py
 
       - name: Download newly added card images
         run: python images.py

@@ -1,14 +1,14 @@
-"""カードラボからワンピースカードゲームの価格を取得し price_history に保存するモジュール。
+"""カードショップ「まんぞく屋」(shopmanzokuya.com)からワンピースカードゲームの
+価格を取得し price_history に保存するモジュール。
 
-カードラボの検索結果には goods_name というクラスの要素に
-"【OP】{カード名}【{レアリティ}】{カード番号}" という形式でカード番号が
-そのまま残っている(名探偵コナンTCGの"【CTCG】...[card_num]"とは末尾の
-括弧の有無が違う)。キーワード「OP」1つで全カードを横断検索できる。
+EC-CUBE系のECカートシステムを使っており、商品名に「OP17-079」のような形式で
+DBの`card_num`と完全一致するカード番号がそのまま含まれている。ただし収録パック名
+(「【OP-17】」のようにハイフンの後が2桁)と実カード番号(「OP17-079」のように
+文字の直後に数字が付き、ハイフンの後は3桁)は桁数のパターンで区別できる。
 
-パラレル("R/SP"のようにレアリティにスラッシュ区切りで付与される)は、公式サイトの
-カードデータ側でも同じカード番号・同じレアリティの複数印刷が存在し、絵違いまでは
-区別できないため、同じ(card_num, レアリティ)を持つDB行が複数あった場合は
-通常版(id が card_num と一致する行)を代表として価格を紐付ける。
+対象カテゴリ(category_id=2636)がワンピースカードゲームの単品カードをまとめている。
+まんぞく屋のrobots.txtは`/*.csv$`のみDisallowで一般クローラーへの制限が無いが、
+他サイトと同様に安全側でリクエスト間隔30秒を採用する。
 """
 import logging
 import re
@@ -22,9 +22,10 @@ from bs4 import BeautifulSoup
 import db
 import price_matching
 
-SEARCH_URL = "https://www.c-labo-online.jp/product-list/"
-KEYWORD = "OP"
-PAGE_SIZE = 120
+BASE_URL = "https://shopmanzokuya.com"
+LIST_URL = BASE_URL + "/products/list"
+CATEGORY_ID = 2636
+PAGE_SIZE = 100
 
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -34,66 +35,71 @@ HEADERS = {
 
 REQUEST_TIMEOUT = 15
 REQUEST_DELAY_SEC = 30
-MAX_PAGES = 80  # 安全のための上限(実際の最終ページはparse_total_countから算出)
+MAX_PAGES = 30
 
-# 例: "【OP】BB【C】OP08-035" / "【OP】お菊【R/SP】(OP07収録)OP01-105"
-#     "【OP】ロロノア・ゾロ[25周年エディション]【L】(PRカード)OP01-001(1)"
-NAME_PATTERN = re.compile(
-    r"^【OP】.*?【([^】]+)】(?:\([^)]*\))?([A-Za-z]{1,4}\d{1,3}-\d{1,3})"
-)
+# 実カード番号: 文字1〜3+数字1〜2+ハイフン+数字3桁 (例: OP17-079, EB04-061, ST31-004)、
+# もしくはプロモの P-107 のような形式。「【OP-17】」のようなパック名(ハイフン後2桁)は
+# 文字の直後に数字が無いため、このパターンにはマッチしない。
+CARD_NUM_PATTERN = re.compile(r"\b([A-Z]{1,3}\d{1,2}-\d{3}|P-\d{3})\b")
+
+TOTAL_COUNT_PATTERN = re.compile(r"(\d+)件")
 
 logger = logging.getLogger(__name__)
 
 
-def fetch_search_page(page: int) -> str:
-    params = {"keyword": KEYWORD, "num": PAGE_SIZE, "page": page}
-    resp = requests.get(SEARCH_URL, params=params, headers=HEADERS, timeout=REQUEST_TIMEOUT)
+def fetch_page(page: int) -> str:
+    params = {"category_id": CATEGORY_ID, "pageno": page}
+    resp = requests.get(LIST_URL, params=params, headers=HEADERS, timeout=REQUEST_TIMEOUT)
     resp.raise_for_status()
     return resp.text
 
 
-def parse_items(html: str) -> list[tuple[str, str, int | None]]:
-    """(card_num, rarity, price) のリストを返す。在庫切れの場合はpriceがNoneになる。"""
+def parse_items(html: str) -> list[tuple[str, int]]:
+    """(card_num, price) のリストを返す。在庫0件(品切れ)や、単品カードとして
+    特定できない商品(セット販売等)は除外する。
+    """
     soup = BeautifulSoup(html, "html.parser")
     results = []
-    for li in soup.select("li.list_item_cell"):
-        name_el = li.select_one(".goods_name")
+    for li in soup.select("li.ec-shelfGrid__item"):
+        name_el = li.select_one(".ec-shelfGrid__item-text")
         if not name_el:
             continue
 
-        m = NAME_PATTERN.match(name_el.get_text())
+        stock_el = li.select_one(".productStock")
+        if stock_el and re.search(r"在庫:0\b", stock_el.get_text(strip=True)):
+            continue
+
+        product_name = name_el.get_text(strip=True)
+        m = CARD_NUM_PATTERN.search(product_name)
         if not m:
             continue
-        rarity, card_num = m.group(1), m.group(2)
+        card_num = m.group(0)
 
-        if "list_item_soldout" in (li.get("class") or []):
-            results.append((card_num, rarity, None))
-            continue
-
-        price_el = li.select_one(".price .figure")
+        price_el = li.select_one(".price02-default")
         if not price_el:
             continue
-
-        price_text = price_el.get_text().split("円")[0].replace(",", "").strip()
+        price_text = price_el.get_text().replace("￥", "").replace(",", "")
+        price_text = re.sub(r"\(税込\)", "", price_text).strip()
         try:
             price = int(price_text)
         except ValueError:
             continue
 
-        results.append((card_num, rarity, price))
+        results.append((card_num, price))
     return results
 
 
 def parse_total_count(html: str) -> int:
     soup = BeautifulSoup(html, "html.parser")
-    el = soup.select_one(".count_number .number")
+    el = soup.select_one(".ec-searchnavRole__counter .ec-font-bold")
     if not el:
         return 0
-    return int(el.get_text().replace(",", ""))
+    m = TOTAL_COUNT_PATTERN.search(el.get_text())
+    return int(m.group(1)) if m else 0
 
 
 def sync_prices(conn=None, delay: float = REQUEST_DELAY_SEC, progress_callback=None) -> dict:
-    """ワンピースカードゲームの価格をカードラボから取得し price_history に保存する。
+    """まんぞく屋からワンピースカードの価格を取得し price_history に保存する。
 
     progress_callback(page, last_page, matched_count) が指定されていれば
     ページ取得のたびに呼び出す。
@@ -117,19 +123,17 @@ def sync_prices(conn=None, delay: float = REQUEST_DELAY_SEC, progress_callback=N
             first_request = False
 
             try:
-                html = fetch_search_page(page)
+                html = fetch_page(page)
             except requests.RequestException as exc:
-                logger.warning("カードラボの取得に失敗 (page=%d): %s", page, exc)
+                logger.warning("まんぞく屋の取得に失敗 (page=%d): %s", page, exc)
                 break
 
             if page == 1:
                 total = parse_total_count(html)
                 last_page = max(1, -(-total // PAGE_SIZE))  # 切り上げ除算
 
-            for card_num, rarity, price in parse_items(html):
-                if price is None:
-                    continue
-                card_id = price_matching.pick_card_id(card_num, lookup, rarity)
+            for card_num, price in parse_items(html):
+                card_id = price_matching.pick_card_id(card_num, lookup)
                 if card_id is None:
                     unmatched_count += 1
                     continue
@@ -143,7 +147,7 @@ def sync_prices(conn=None, delay: float = REQUEST_DELAY_SEC, progress_callback=N
         run_recorded_at = datetime.now(timezone.utc).isoformat()
         for card_id, prices in all_prices.items():
             db.insert_price(
-                conn, card_id, "カードラボ", min(prices),
+                conn, card_id, "まんぞく屋", min(prices),
                 recorded_at=run_recorded_at, sample_count=len(prices),
             )
 
