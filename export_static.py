@@ -4,7 +4,6 @@ GitHub Pages等の静的ホスティングで動かすため、サイト側は�
 fetchするだけで完結する(サーバーサイド処理は一切不要)。
 """
 import json
-import shutil
 from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
@@ -13,7 +12,6 @@ import db
 import images
 
 SITE_DATA_DIR = Path(__file__).parent / "site" / "data"
-SITE_IMAGE_DIR = Path(__file__).parent / "site" / "images" / "cards"
 
 CARD_FIELDS = [
     "id", "card_num", "name", "card_type", "rarity", "color", "cost", "life",
@@ -35,18 +33,6 @@ def build_cards_json(conn) -> list[dict]:
         card["image_url"] = f"images/cards/{local_name}" if local_name else None
         cards.append(card)
     return cards
-
-
-def sync_site_images() -> int:
-    """data/card_images/ に保存済みの画像を site/images/cards/ へコピーする。"""
-    SITE_IMAGE_DIR.mkdir(parents=True, exist_ok=True)
-    copied = 0
-    for src in images.IMAGE_DIR.glob("*"):
-        dest = SITE_IMAGE_DIR / src.name
-        if not dest.exists() or dest.stat().st_mtime < src.stat().st_mtime:
-            shutil.copyfile(src, dest)
-            copied += 1
-    return copied
 
 
 def build_prices_latest_json(conn) -> dict:
@@ -117,10 +103,9 @@ def export_static() -> None:
     (SITE_DATA_DIR / "prices_latest.json").write_text(
         json.dumps(prices_latest, ensure_ascii=False), encoding="utf-8"
     )
-    copied = sync_site_images()
     print(
         f"site/data/cards.json, meta.json, prices_latest.json({len(prices_latest)}件) "
-        f"を書き出しました(画像 {copied} 件をコピー)。"
+        f"を書き出しました。"
     )
 
 

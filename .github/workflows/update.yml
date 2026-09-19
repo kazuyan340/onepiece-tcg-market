@@ -1,0 +1,73 @@
+name: Daily card and price update
+
+on:
+  schedule:
+    # 毎日 UTC17:00 = JST2:00 (GitHubの0分ちょうどスケジュールは混雑で遅延しがちなため、
+    # conan-tcg-market側の運用実績に倣ってちょうど0分は避けている)
+    - cron: "3 17 * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      PYTHONIOENCODING: utf-8
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      # cards/price_historyを蓄積したDBはリポジトリにコミットせず(サイズが大きく
+      # 差分もほぼ全行になるため)、固定名のGitHub Releaseアセットに保存して
+      # 実行のたびに読み書きする。初回(このリリースを作る前)は無くて構わない。
+      - name: Restore price/card database
+        id: db_restore
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p data
+          if gh release download db-store --repo ${{ github.repository }} --pattern onepiece_tcg.db --dir data --clobber; then
+            echo "found=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "found=false" >> "$GITHUB_OUTPUT"
+            echo "db-store release asset not found yet (expected on first run)."
+          fi
+
+      - name: Sync card list (diff update)
+        run: python scraper_cards.py
+
+      - name: Fetch prices from Card Labo
+        run: python scraper_prices_cardlabo.py
+
+      - name: Download newly added card images
+        run: python images.py
+
+      - name: Export static JSON for the site
+        run: python export_static.py
+
+      - name: Save price/card database for the next run
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload db-store data/onepiece_tcg.db --repo ${{ github.repository }} --clobber
+
+      - name: Commit updated site data
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add site/data/ site/images/
+          git diff --cached --quiet || git commit -m "chore: daily card/price update"
+          # このジョブが更新するのはサイトデータ・画像だけなので、手動でのコード修正等の
+          # pushとコンフリクトした場合はこのジョブが今生成した内容を優先してよい
+          # (conan-tcg-marketでの運用実績に倣った対処)。
+          git fetch origin main
+          git merge -X ours origin/main --no-edit
+          git push

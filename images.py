@@ -1,9 +1,13 @@
-"""公式サイトのカード画像をダウンロードし、data/card_images/ に保存するモジュール。
+"""公式サイトのカード画像をダウンロードし、site/images/cards/ に保存するモジュール。
 
 onepiece-cardgame.com の画像はレスポンスヘッダで
 `Cross-Origin-Resource-Policy: same-site` が付いており、他ドメイン(GitHub Pages等)
 からの直リンク(<img src="https://www.onepiece-cardgame.com/...">)がブラウザ側で
 ブロックされる。そのため画像を一度ダウンロードして自サイトから配信する必要がある。
+
+ダウンロード先はサイトの公開ディレクトリ(site/images/cards/)そのものにしている
+(scraper/db用の中間キャッシュと公開用ファイルを分けない)。gitで管理するため、
+2回目以降の実行では新しいパック分の画像だけが差分ダウンロードされる。
 """
 import logging
 import time
@@ -13,7 +17,7 @@ import requests
 
 import db
 
-IMAGE_DIR = Path(__file__).parent / "data" / "card_images"
+IMAGE_DIR = Path(__file__).parent / "site" / "images" / "cards"
 
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
