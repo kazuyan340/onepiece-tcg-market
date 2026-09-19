@@ -13,13 +13,16 @@ import re
 import time
 from collections import defaultdict
 from datetime import datetime, timezone
+from urllib.parse import urljoin
 
 import requests
 from bs4 import BeautifulSoup
 
 import db
 import price_matching
+from unresolved_report import write_unresolved
 
+SITE_ROOT = "https://www.cardshop-waitv.net"
 BASE_URL = "https://www.cardshop-waitv.net/product-list/1"
 PAGE_SIZE = 120
 
@@ -64,9 +67,9 @@ def _parse_name(name_text: str) -> tuple[str | None, str | None]:
     return card_num, rarity
 
 
-def parse_items(html: str) -> list[tuple[str, str | None, int]]:
-    """(card_num, rarity, price) のリストを返す(在庫切れ商品はページに表示されないため
-    在庫切れの区別は不要)。"""
+def parse_items(html: str) -> list[tuple[str, str | None, int, str, str | None, str | None]]:
+    """(card_num, rarity, price, 商品名, 商品画像URL, 商品ページURL) のリストを返す
+    (在庫切れ商品はページに表示されないため在庫切れの区別は不要)。"""
     soup = BeautifulSoup(html, "html.parser")
     results = []
     for li in soup.select("li.list_item_cell"):
@@ -74,7 +77,8 @@ def parse_items(html: str) -> list[tuple[str, str | None, int]]:
         if not name_el:
             continue
 
-        card_num, rarity = _parse_name(name_el.get_text())
+        name_text = name_el.get_text()
+        card_num, rarity = _parse_name(name_text)
         if not card_num:
             continue
 
@@ -87,7 +91,12 @@ def parse_items(html: str) -> list[tuple[str, str | None, int]]:
         except ValueError:
             continue
 
-        results.append((card_num, rarity, price))
+        photo_el = li.select_one(".global_photo")
+        image_url = photo_el.get("data-src") if photo_el else None
+        link_el = li.select_one("a.item_data_link")
+        product_url = urljoin(SITE_ROOT, link_el.get("href")) if link_el and link_el.get("href") else None
+
+        results.append((card_num, rarity, price, name_text.strip(), image_url, product_url))
     return results
 
 
@@ -111,8 +120,9 @@ def sync_prices(conn=None, delay: float = REQUEST_DELAY_SEC, progress_callback=N
         db.init_db(conn)
 
     lookup = price_matching.build_lookup(conn)
+    manual_resolutions = price_matching.load_manual_resolutions()
     all_prices: dict[str, list[int]] = defaultdict(list)
-    unmatched_count = 0
+    unresolved_entries: list[dict] = []
     first_request = True
 
     try:
@@ -133,15 +143,14 @@ def sync_prices(conn=None, delay: float = REQUEST_DELAY_SEC, progress_callback=N
                 total = parse_total_count(html)
                 last_page = max(1, -(-total // PAGE_SIZE))  # 切り上げ除算
 
-            for card_num, rarity, price in parse_items(html):
+            for card_num, rarity, price, product_name, image_url, product_url in parse_items(html):
                 # わいTVは「P-SR」のようにパラレル表記にP-を前置するが、DB側の
                 # rarityはこの前置詞を持たないため、マッチング時だけ取り除く。
                 normalized_rarity = rarity[2:] if rarity and rarity.startswith("P-") else rarity
-                card_id = price_matching.pick_card_id(card_num, lookup, normalized_rarity)
-                if card_id is None:
-                    unmatched_count += 1
-                    continue
-                all_prices[card_id].append(price)
+                price_matching.apply_resolution(
+                    all_prices, unresolved_entries, card_num, normalized_rarity, price,
+                    lookup, manual_resolutions, product_name, image_url, product_url,
+                )
 
             if progress_callback:
                 progress_callback(page, last_page, len(all_prices))
@@ -155,10 +164,12 @@ def sync_prices(conn=None, delay: float = REQUEST_DELAY_SEC, progress_callback=N
                 recorded_at=run_recorded_at, sample_count=len(prices),
             )
 
-        summary = {"matched_cards": len(all_prices), "unmatched_listings": unmatched_count}
+        write_unresolved("わいTV", unresolved_entries)
+
+        summary = {"matched_cards": len(all_prices), "unresolved_listings": len(unresolved_entries)}
         logger.info(
-            "完了: %d枚の価格を取得 (DBに無いカード番号の出品 %d件はスキップ)",
-            summary["matched_cards"], summary["unmatched_listings"],
+            "完了: %d枚の価格を取得 (特定できなかった出品 %d件は管理ページへ)",
+            summary["matched_cards"], summary["unresolved_listings"],
         )
         return summary
     finally:

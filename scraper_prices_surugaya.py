@@ -25,6 +25,7 @@ from bs4 import BeautifulSoup
 
 import db
 import price_matching
+from unresolved_report import write_unresolved
 
 SEARCH_URL = "https://www.suruga-ya.jp/search"
 TOP_URL = "https://www.suruga-ya.jp/"
@@ -73,8 +74,10 @@ def fetch_search_page(session: requests.Session, rarity: str, page: int) -> str:
     return resp.text
 
 
-def parse_items(html: str) -> list[tuple[str, str, int | None]]:
-    """(card_num, rarity, price) のリストを返す。品切れの場合はpriceがNoneになる。"""
+def parse_items(html: str) -> list[tuple[str, str, int | None, str | None, str | None, str | None]]:
+    """(card_num, rarity, price, 商品名, 商品画像URL, 商品ページURL) のリストを返す。
+    品切れの場合はpriceがNoneになる。
+    """
     soup = BeautifulSoup(html, "html.parser")
     results = []
     for item in soup.select("div.item"):
@@ -91,13 +94,19 @@ def parse_items(html: str) -> list[tuple[str, str, int | None]]:
             continue
 
         card_num, rarity = m.group(1), m.group(2)
+        product_name = m.group(3).strip() if m.group(3) else None
+
+        thumb_link = item.select_one(".photo_box .thum a")
+        product_url = thumb_link.get("href") if thumb_link else None
+        img_el = item.select_one(".photo_box .thum img")
+        image_url = img_el.get("src") if img_el else None
 
         price_el = item.select_one(".item_price")
         if not price_el:
             continue
 
         if "品切れ" in price_el.get_text():
-            results.append((card_num, rarity, None))
+            results.append((card_num, rarity, None, product_name, image_url, product_url))
             continue
 
         teika_el = price_el.select_one(".price_teika")
@@ -106,7 +115,10 @@ def parse_items(html: str) -> list[tuple[str, str, int | None]]:
         price_m = PRICE_PATTERN.search(teika_el.get_text())
         if not price_m:
             continue
-        results.append((card_num, rarity, int(price_m.group(0).replace(",", ""))))
+        results.append((
+            card_num, rarity, int(price_m.group(0).replace(",", "")),
+            product_name, image_url, product_url,
+        ))
     return results
 
 
@@ -130,11 +142,12 @@ def sync_prices(conn=None, delay: float = REQUEST_DELAY_SEC, progress_callback=N
         db.init_db(conn)
 
     lookup = price_matching.build_lookup(conn)
+    manual_resolutions = price_matching.load_manual_resolutions()
     target_rarities = db.get_distinct_values(conn, "rarity")
     logger.info("価格取得対象レアリティ: %s", ", ".join(target_rarities))
 
     all_prices: dict[str, list[int]] = defaultdict(list)
-    unmatched_count = 0
+    unresolved_entries: list[dict] = []
     first_request = True
 
     try:
@@ -162,14 +175,13 @@ def sync_prices(conn=None, delay: float = REQUEST_DELAY_SEC, progress_callback=N
                 if page == 1:
                     last_page = parse_last_page(html)
 
-                for card_num, item_rarity, price in parse_items(html):
+                for card_num, item_rarity, price, product_name, image_url, product_url in parse_items(html):
                     if price is None:
                         continue
-                    card_id = price_matching.pick_card_id(card_num, lookup, item_rarity)
-                    if card_id is None:
-                        unmatched_count += 1
-                        continue
-                    all_prices[card_id].append(price)
+                    price_matching.apply_resolution(
+                        all_prices, unresolved_entries, card_num, item_rarity, price,
+                        lookup, manual_resolutions, product_name, image_url, product_url,
+                    )
 
                 if progress_callback:
                     progress_callback(rarity, page, len(all_prices))
@@ -184,10 +196,12 @@ def sync_prices(conn=None, delay: float = REQUEST_DELAY_SEC, progress_callback=N
                 recorded_at=run_recorded_at, sample_count=len(prices),
             )
 
-        summary = {"matched_cards": len(all_prices), "unmatched_listings": unmatched_count}
+        write_unresolved("駿河屋", unresolved_entries)
+
+        summary = {"matched_cards": len(all_prices), "unresolved_listings": len(unresolved_entries)}
         logger.info(
-            "完了: %d枚の価格を取得 (DBに無いカード番号の出品 %d件はスキップ)",
-            summary["matched_cards"], summary["unmatched_listings"],
+            "完了: %d枚の価格を取得 (特定できなかった出品 %d件は管理ページへ)",
+            summary["matched_cards"], summary["unresolved_listings"],
         )
         return summary
     finally:

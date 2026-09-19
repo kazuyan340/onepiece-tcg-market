@@ -57,7 +57,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: onepiece-tcg-db
-          path: data/onepiece_tcg.db
+          path: |
+            data/onepiece_tcg.db
+            site/data/unresolved_raw/駿河屋.json
           retention-days: 1
 
   fetch_others_and_publish:
@@ -76,11 +78,13 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
+      # data/onepiece_tcg.db と site/data/unresolved_raw/駿河屋.json の両方が
+      # 元のパスのまま展開されるよう、リポジトリルート(path: .)に復元する。
       - name: Receive database from the Suruga-ya job
         uses: actions/download-artifact@v4
         with:
           name: onepiece-tcg-db
-          path: data
+          path: .
 
       - name: Fetch prices from Card Labo
         run: python scraper_prices_cardlabo.py
@@ -93,6 +97,9 @@ jobs:
 
       - name: Fetch prices from Cardrush
         run: python scraper_prices_cardrush.py
+
+      - name: Build unresolved shop-listing report
+        run: python build_unresolved_report.py
 
       - name: Download newly added card images
         run: python images.py

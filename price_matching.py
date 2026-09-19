@@ -3,33 +3,100 @@
 
 公式サイトのデータでは、同じカード番号(card_num)でも通常版・パラレル版などが別の
 DB行(id)として存在することがあり、しかも公式サイト自体が両者に同じrarity値を
-付けている場合もあるため、ショップの商品情報だけでは絵柄違いまで確実に区別できない。
-そのため「同じcard_num(+わかればrarity)の中では、通常版(id==card_num)を代表として
-価格を紐付ける」という割り切った方針を全ショップ共通で採用する。
+付けている場合もあるため、ショップの商品情報だけでは絵柄違いまで確実に区別できない
+ことがある。そのようなケースで自動的に「どちらか」を推測することはせず、
+候補が複数残った場合は常に「特定できなかったもの」として扱い、管理ページ
+(site/admin-unresolved.html)でユーザー自身に選んでもらう。
+
+ユーザーが管理ページで選んだ結果はmanual_resolutions.json(商品ページURL -> card_id)
+に反映され、次回以降のスクレイパー実行ではそちらが最優先で使われる。
 """
+import json
 from collections import defaultdict
+from pathlib import Path
+
+MANUAL_RESOLUTIONS_PATH = Path(__file__).parent / "manual_resolutions.json"
 
 
 def build_lookup(conn) -> dict[str, list[dict]]:
-    rows = conn.execute("SELECT id, card_num, rarity FROM cards").fetchall()
+    rows = conn.execute("SELECT id, card_num, rarity, name, pack, image_url FROM cards").fetchall()
     lookup: dict[str, list[dict]] = defaultdict(list)
     for row in rows:
-        lookup[row["card_num"]].append({"id": row["id"], "rarity": row["rarity"]})
+        lookup[row["card_num"]].append(dict(row))
     return lookup
 
 
-def pick_card_id(card_num: str, lookup: dict[str, list[dict]], shop_rarity: str | None = None) -> str | None:
-    candidates = lookup.get(card_num)
+def load_manual_resolutions() -> dict[str, str]:
+    """商品ページURL -> cards.id の手動確定マップを読み込む。ファイルが無ければ
+    空の辞書を返す(このリポジトリではオプトインの仕組みなので、無くても正常動作する)。
+    """
+    if not MANUAL_RESOLUTIONS_PATH.exists():
+        return {}
+    data = json.loads(MANUAL_RESOLUTIONS_PATH.read_text(encoding="utf-8"))
+    return {entry["product_url"]: entry["card_id"] for entry in data if entry.get("product_url")}
+
+
+def resolve(
+    card_num: str,
+    lookup: dict[str, list[dict]],
+    rarity: str | None = None,
+    product_url: str | None = None,
+    manual_resolutions: dict[str, str] | None = None,
+) -> dict:
+    """商品(card_num, rarity, product_url)からカードを1枚に特定する。
+
+    戻り値は次のいずれか:
+    - {"status": "resolved", "card_id": ...}
+        1枚に特定できた(手動確定リストに載っている、またはDB候補が1件だけ)。
+    - {"status": "ambiguous", "candidates": [...]}
+        DBには該当card_numの候補が複数あり、自動では1枚に絞れない。
+    - {"status": "missing"}
+        該当card_numがDBに1件も無い。
+    """
+    if manual_resolutions and product_url and product_url in manual_resolutions:
+        return {"status": "resolved", "card_id": manual_resolutions[product_url]}
+
+    candidates = lookup.get(card_num, [])
+    if rarity:
+        base_rarity = rarity.split("/")[0].strip()
+        narrowed = [c for c in candidates if c["rarity"] == base_rarity]
+        if narrowed:
+            candidates = narrowed
+
     if not candidates:
-        return None
+        return {"status": "missing"}
+    if len(candidates) == 1:
+        return {"status": "resolved", "card_id": candidates[0]["id"]}
+    return {"status": "ambiguous", "candidates": candidates}
 
-    if shop_rarity:
-        base_rarity = shop_rarity.split("/")[0].strip()
-        same_rarity = [c for c in candidates if c["rarity"] == base_rarity]
-        if same_rarity:
-            candidates = same_rarity
 
-    for c in candidates:
-        if c["id"] == card_num:
-            return c["id"]
-    return candidates[0]["id"]
+def apply_resolution(
+    all_prices: dict,
+    unresolved_entries: list,
+    card_num: str,
+    rarity: str | None,
+    price: int,
+    lookup: dict[str, list[dict]],
+    manual_resolutions: dict[str, str],
+    product_name: str | None = None,
+    image_url: str | None = None,
+    product_url: str | None = None,
+) -> None:
+    """1商品分の価格を解決し、確定できればall_prices(card_id -> [price,...])へ、
+    特定できなければunresolved_entriesへ追加する(各スクレイパー共通のロジック)。
+    """
+    result = resolve(card_num, lookup, rarity, product_url, manual_resolutions)
+    if result["status"] == "resolved":
+        all_prices[result["card_id"]].append(price)
+        return
+
+    entry = {
+        "raw_key": card_num,
+        "rarity": rarity,
+        "price": price,
+        "product_name": product_name,
+        "image_url": image_url,
+        "product_url": product_url,
+        "candidates": result.get("candidates", []),
+    }
+    unresolved_entries.append(entry)
