@@ -162,6 +162,33 @@ body {
   color: var(--text-dim);
 }
 
+.card-tile-price {
+  margin-top: 4px;
+  font-size: 0.8rem;
+  font-weight: bold;
+  color: #ffd166;
+}
+
+.price-block .price-best {
+  font-size: 1.1rem;
+  font-weight: bold;
+  color: #ffd166;
+  margin-bottom: 6px;
+}
+
+.price-shop-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.82rem;
+  padding: 3px 0;
+  border-bottom: 1px dashed var(--border);
+}
+
+.price-empty {
+  color: var(--text-dim);
+  font-size: 0.85rem;
+}
+
 .modal-overlay {
   position: fixed;
   inset: 0;

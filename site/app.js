@@ -4,6 +4,7 @@
 
   let allCards = [];
   let meta = null;
+  let pricesLatest = {};
 
   const state = {
     keyword: "",
@@ -37,6 +38,10 @@
 
     const frag = document.createDocumentFragment();
     for (const card of filtered) {
+      const priceInfo = pricesLatest[card.id];
+      const priceBadge = priceInfo
+        ? `<div class="card-tile-price">¥${priceInfo.best.price.toLocaleString()}〜</div>`
+        : "";
       const tile = document.createElement("button");
       tile.type = "button";
       tile.className = "card-tile";
@@ -44,6 +49,7 @@
         <img class="card-thumb" src="${card.image_url || ""}" alt="${card.name}" loading="lazy">
         <div class="card-tile-name">${card.name}</div>
         <div class="card-tile-sub">${card.id} ・ ${card.rarity || ""}</div>
+        ${priceBadge}
       `;
       tile.addEventListener("click", () => openModal(card));
       frag.appendChild(tile);
@@ -91,6 +97,30 @@
     return `<div class="info-row"><span class="info-label">${label}</span><span class="info-value">${value}</span></div>`;
   }
 
+  function priceSection(card) {
+    const priceInfo = pricesLatest[card.id];
+    if (!priceInfo) {
+      return `<div class="info-block price-block"><h3>相場</h3><p class="price-empty">価格データがありません。</p></div>`;
+    }
+    const updatedAt = new Date(priceInfo.best.recorded_at).toLocaleDateString("ja-JP");
+    const shopRows = priceInfo.shops
+      .slice()
+      .sort((a, b) => a.price - b.price)
+      .map((shop) => `
+        <div class="price-shop-row">
+          <span>${shop.site}</span>
+          <span>¥${shop.price.toLocaleString()} (${shop.sample_count}件の出品中最安値)</span>
+        </div>
+      `).join("");
+    return `
+      <div class="info-block price-block">
+        <h3>相場(最終取得: ${updatedAt})</h3>
+        <div class="price-best">¥${priceInfo.best.price.toLocaleString()}〜 (${priceInfo.best.site})</div>
+        ${shopRows}
+      </div>
+    `;
+  }
+
   function openModal(card) {
     const overlay = document.getElementById("modal-overlay");
     const img = document.getElementById("modal-image");
@@ -116,6 +146,7 @@
       ${card.ability_text ? `<div class="info-block"><h3>テキスト</h3><p>${card.ability_text}</p></div>` : ""}
       ${card.trigger_text ? `<div class="info-block"><h3>トリガー</h3><p>${card.trigger_text}</p></div>` : ""}
       ${statRow("収録パック", card.pack)}
+      ${priceSection(card)}
     `;
 
     overlay.classList.remove("hidden");
@@ -129,9 +160,11 @@
     Promise.all([
       fetch("data/cards.json").then((r) => r.json()),
       fetch("data/meta.json").then((r) => r.json()),
-    ]).then(([cards, metaJson]) => {
+      fetch("data/prices_latest.json").then((r) => (r.ok ? r.json() : {})),
+    ]).then(([cards, metaJson, prices]) => {
       allCards = cards;
       meta = metaJson;
+      pricesLatest = prices;
 
       document.getElementById("last-updated").textContent =
         "最終更新: " + new Date(meta.generated_at).toLocaleString("ja-JP");
