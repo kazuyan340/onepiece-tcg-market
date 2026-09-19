@@ -1,0 +1,4 @@
+__pycache__/
+*.pyc
+data/onepiece_tcg.db
+data/card_images/

@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="ワンピースカードゲームの全カード情報を検索・閲覧できるカード図鑑サイト。">
+<title>ワンピースカードゲーム カード図鑑</title>
+<link rel="stylesheet" href="style.css?v=1">
+</head>
+<body>
+<header class="toolbar">
+  <div class="title-row">
+    <div class="title-block">
+      <h1>ワンピースカードゲーム カード図鑑</h1>
+      <p id="last-updated" class="last-updated"></p>
+    </div>
+  </div>
+  <div class="filters">
+    <div class="filter-item">
+      <label for="keyword">キーワード</label>
+      <input type="text" id="keyword" placeholder="カード名・特徴・効果テキストで検索">
+    </div>
+    <button type="button" id="toggle-filters" class="filters-chevron-btn" title="絞り込み条件を開閉">▾</button>
+  </div>
+  <div class="filters filters-extra" id="filters-panel">
+    <details class="filter-group" id="filter-color-group" open>
+      <summary>色<span class="count-badge hidden"></span></summary>
+      <div class="checkbox-list" id="filter-color-list"></div>
+    </details>
+    <details class="filter-group" id="filter-type-group" open>
+      <summary>種類<span class="count-badge hidden"></span></summary>
+      <div class="checkbox-list" id="filter-type-list"></div>
+    </details>
+    <details class="filter-group" id="filter-rarity-group">
+      <summary>レアリティ<span class="count-badge hidden"></span></summary>
+      <div class="checkbox-list" id="filter-rarity-list"></div>
+    </details>
+    <details class="filter-group" id="filter-pack-group">
+      <summary>収録パック<span class="count-badge hidden"></span></summary>
+      <div class="checkbox-list" id="filter-pack-list"></div>
+    </details>
+    <button type="button" id="reset-filters" class="filter-reset-btn">↺ 条件をリセット</button>
+  </div>
+  <p id="result-count" class="result-count"></p>
+</header>
+
+<main id="card-grid" class="card-grid"></main>
+
+<div id="modal-overlay" class="modal-overlay hidden">
+  <div class="modal-card">
+    <button id="modal-close" class="modal-close">&times;</button>
+    <div class="modal-body">
+      <div class="modal-image">
+        <img id="modal-image" alt="">
+      </div>
+      <div class="modal-info" id="modal-info"></div>
+    </div>
+  </div>
+</div>
+
+<footer class="site-disclaimer">
+  <p>掲載しているカード画像・カード情報はワンピースカードゲーム公式サイトの情報を参照しています。</p>
+</footer>
+
+<script src="app.js?v=1"></script>
+</body>
+</html>
