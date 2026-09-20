@@ -290,27 +290,91 @@ body {
   white-space: pre-line;
 }
 
+/* ナビ本体は右から重なるドロワーにする(PC・スマホとも共通)。開閉は三本線ボタン
+   (.nav-menu-toggle)のクリックでnav-linksに.openを付け外しする(app.js参照)。 */
 .nav-links {
   display: flex;
-  gap: 8px;
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 78vw;
+  max-width: 300px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  margin: 0;
+  padding: 56px 16px 20px;
+  background: var(--surface);
+  box-shadow: -6px 0 24px rgba(0, 0, 0, 0.25);
+  z-index: 100;
+  overflow-y: auto;
+  transform: translateX(100%);
+  transition: transform 0.25s ease;
+}
+
+.nav-links.open {
+  transform: translateX(0);
 }
 
 .nav-btn {
   color: var(--text);
   text-decoration: none;
-  font-size: 0.8rem;
-  padding: 6px 10px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
+  font-size: 0.95rem;
+  text-align: left;
+  padding: 13px 14px;
+  border: none;
+  border-radius: 8px;
   white-space: nowrap;
+  background: var(--bg);
 }
 
 .nav-btn-disabled {
-  background: none;
   color: var(--text-dim);
-  border-color: var(--border);
   opacity: 0.6;
   cursor: not-allowed;
+}
+
+.nav-menu-toggle {
+  margin-left: auto;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 1.1rem;
+  line-height: 1;
+  padding: 6px 12px;
+  cursor: pointer;
+}
+
+.nav-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  z-index: 90;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s ease;
+}
+
+.nav-backdrop.open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.nav-drawer-close {
+  display: block;
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 50%;
+  background: var(--bg);
+  color: var(--text-dim);
+  font-size: 1rem;
+  cursor: pointer;
 }
 
 .title-row {

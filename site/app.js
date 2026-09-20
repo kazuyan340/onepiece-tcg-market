@@ -192,6 +192,46 @@
     document.getElementById("modal-overlay").classList.add("hidden");
   }
 
+  // ナビ用の三本線メニュー。開閉ボタン(.nav-menu-toggle)クリックで.nav-linksを
+  // 右から出すドロワーとして開閉する(暗幕・閉じるボタンはここで生成)。
+  function bindNavMenuToggle() {
+    const btn = document.querySelector(".nav-menu-toggle");
+    const nav = document.querySelector(".nav-links");
+    if (!btn || !nav) return;
+
+    const backdrop = document.createElement("div");
+    backdrop.className = "nav-backdrop";
+    nav.parentNode.insertBefore(backdrop, nav);
+
+    const closeBtn = document.createElement("button");
+    closeBtn.type = "button";
+    closeBtn.className = "nav-drawer-close";
+    closeBtn.setAttribute("aria-label", "閉じる");
+    closeBtn.textContent = "✕";
+    nav.insertBefore(closeBtn, nav.firstChild);
+
+    function setOpen(isOpen) {
+      nav.classList.toggle("open", isOpen);
+      backdrop.classList.toggle("open", isOpen);
+      btn.setAttribute("aria-expanded", String(isOpen));
+      document.body.style.overflow = isOpen ? "hidden" : "";
+    }
+
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      setOpen(!nav.classList.contains("open"));
+    });
+
+    closeBtn.addEventListener("click", () => setOpen(false));
+    backdrop.addEventListener("click", () => setOpen(false));
+
+    document.addEventListener("click", (e) => {
+      if (nav.classList.contains("open") && !nav.contains(e.target) && e.target !== btn) {
+        setOpen(false);
+      }
+    });
+  }
+
   function init() {
     Promise.all([
       fetch("data/cards.json").then((r) => r.json()),
@@ -226,6 +266,8 @@
     document.getElementById("toggle-filters").addEventListener("click", () => {
       document.getElementById("filters-panel").classList.toggle("open");
     });
+
+    bindNavMenuToggle();
   }
 
   document.addEventListener("DOMContentLoaded", init);
