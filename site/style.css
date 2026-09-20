@@ -731,6 +731,33 @@ body {
   align-self: flex-start;
 }
 
+.card-detail-page {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+.card-detail-card {
+  max-width: none;
+  width: auto;
+}
+
+.card-detail-back {
+  margin: 16px 4px 0;
+  font-size: 0.85rem;
+}
+
+.card-detail-back a {
+  color: var(--text-dim);
+}
+
+.modal-detail-link {
+  display: inline-block;
+  margin-top: 10px;
+  font-size: 0.82rem;
+  color: #7fd4ff;
+}
+
 .site-disclaimer {
   padding: 16px;
   font-size: 0.72rem;

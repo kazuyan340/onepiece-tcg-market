@@ -107,6 +107,9 @@ jobs:
       - name: Export static JSON for the site
         run: python export_static.py
 
+      - name: Generate per-card SEO pages
+        run: python generate_card_pages.py
+
       - name: Save price/card database for the next run
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -116,7 +119,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add site/data/ site/images/
+          git add site/data/ site/images/ site/card/ site/sitemap.xml
           git diff --cached --quiet || git commit -m "chore: daily card/price update"
           # このジョブが更新するのはサイトデータ・画像だけなので、手動でのコード修正等の
           # pushとコンフリクトした場合はこのジョブが今生成した内容を優先してよい

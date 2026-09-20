@@ -295,6 +295,7 @@ function openModal(card, pricesLatest) {
   info.innerHTML = `
     <h2 class="modal-card-name">${escapeHtml(card.name)}</h2>
     <div class="modal-card-id">${card.id} ・ ${escapeHtml(card.rarity || "")} ・ ${escapeHtml(card.card_type || "")}</div>
+    <a class="modal-detail-link" href="card/${card.id}.html">🔗 このカードの詳細ページを見る</a>
     ${costOrLife}
     ${statRow("パワー", card.power)}
     ${statRow("カウンター", card.counter)}
