@@ -131,6 +131,7 @@ body {
 }
 
 .card-tile {
+  position: relative;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -138,6 +139,104 @@ body {
   color: var(--text);
   cursor: pointer;
   text-align: left;
+}
+
+.favorite-star {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  z-index: 2;
+  background: rgba(13, 27, 42, 0.7);
+  border: none;
+  border-radius: 50%;
+  width: 26px;
+  height: 26px;
+  font-size: 1rem;
+  line-height: 1;
+  color: var(--text-dim);
+  cursor: pointer;
+}
+
+.favorite-star.active {
+  color: #ffd166;
+}
+
+.modal-favorite-star {
+  position: absolute;
+  top: 10px;
+  left: 14px;
+  right: auto;
+  background: none;
+  font-size: 1.4rem;
+}
+
+.trend-badge {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  z-index: 1;
+  background: rgba(13, 27, 42, 0.85);
+  color: #ffd166;
+  font-size: 0.68rem;
+  font-weight: bold;
+  padding: 2px 6px;
+  border-radius: 6px;
+  white-space: nowrap;
+}
+
+.trend-section {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 0 16px;
+}
+
+.trend-section h2 {
+  margin: 24px 0 4px;
+  font-size: 1.05rem;
+}
+
+.trend-desc {
+  margin: 0 0 8px;
+  font-size: 0.78rem;
+  color: var(--text-dim);
+}
+
+.empty-message {
+  color: var(--text-dim);
+  font-size: 0.85rem;
+  padding: 8px 16px;
+}
+
+.price-chart-col {
+  margin-top: 10px;
+}
+
+.period-tabs {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.period-tab {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
+.period-tab.active {
+  color: var(--text);
+  border-color: #ffd166;
+}
+
+#price-chart {
+  width: 100%;
+  max-width: 420px;
+  background: var(--bg);
+  border-radius: 6px;
 }
 
 .card-thumb {
