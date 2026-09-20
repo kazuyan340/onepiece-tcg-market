@@ -44,6 +44,17 @@ function sortPackValues(values) {
 // ---- 3値(含む/除外/指定なし)の絞り込みチェックボックス。クリックのたびに
 // 指定なし→含む→除外→指定なしと状態が変わる。valuesがgroupFnで分類できる
 // 場合は見出しを挟んでグループ表示する(収録パック用)。 ----
+// containerIdが"filter-xxx-list"の形であれば、対応する"filter-xxx-group"内の
+// .count-badgeに選択数(含む+除外の合計)を反映する。無ければ何もしない。
+function updateFilterCountBadge(containerId, includeSet, excludeSet) {
+  const groupId = containerId.replace(/-list$/, "-group");
+  const badge = document.querySelector(`#${groupId} .count-badge`);
+  if (!badge) return;
+  const n = includeSet.size + excludeSet.size;
+  badge.textContent = n || "";
+  badge.classList.toggle("hidden", n === 0);
+}
+
 function buildTriStateList(containerId, values, includeSet, excludeSet, onChange, groupFn) {
   const container = document.getElementById(containerId);
   const frag = document.createDocumentFragment();
@@ -60,6 +71,8 @@ function buildTriStateList(containerId, values, includeSet, excludeSet, onChange
     btn.dataset.state = state;
     btn.textContent = (state === "include" ? "✅ " : state === "exclude" ? "🚫 " : "☐ ") + value;
   }
+
+  updateFilterCountBadge(containerId, includeSet, excludeSet);
 
   for (const value of values) {
     if (!value) continue;
@@ -88,6 +101,7 @@ function buildTriStateList(containerId, values, includeSet, excludeSet, onChange
         excludeSet.delete(value);
       }
       applyVisual(btn, value);
+      updateFilterCountBadge(containerId, includeSet, excludeSet);
       onChange();
     });
     frag.appendChild(btn);
