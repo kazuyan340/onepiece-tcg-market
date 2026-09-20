@@ -305,6 +305,14 @@ body {
   white-space: nowrap;
 }
 
+.nav-btn-disabled {
+  background: none;
+  color: var(--text-dim);
+  border-color: var(--border);
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .title-row {
   display: flex;
   justify-content: space-between;
