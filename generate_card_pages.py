@@ -14,11 +14,37 @@ HTMLに直接埋め込み、JavaScript実行に依存せず検索エンジンが
 """
 import html
 import json
+import urllib.parse
 from pathlib import Path
 
 import db
 import images
 from export_static import CARD_FIELDS, build_prices_latest_json
+
+# メルカリ・Amazon・楽天市場の「価格を確認する」ボタン。アフィリエイトIDは
+# conan-tcg-marketと共用(サイト側のcommon.jsと同じ定数・URL形式)。
+MERCARI_AFFILIATE_ID = "8969530097"
+AMAZON_ASSOCIATE_TAG = "conantcgmarke-22"
+RAKUTEN_AFFILIATE_ID = "567cd45a.2625f6eb.567cd45b.7e49c506"
+
+
+def _purchase_buttons_html(card_name: str, card_id: str, rarity: str | None) -> str:
+    query = " ".join(p for p in (card_name, card_id, rarity or "") if p).strip()
+    q = urllib.parse.quote(query)
+    mercari_url = f"https://jp.mercari.com/search?afid={MERCARI_AFFILIATE_ID}&keyword={q}"
+    amazon_url = f"https://www.amazon.co.jp/s?k={q}&tag={AMAZON_ASSOCIATE_TAG}"
+    rakuten_target = urllib.parse.quote(f"https://search.rakuten.co.jp/search/mall/{q}/", safe="")
+    rakuten_url = f"https://hb.afl.rakuten.co.jp/hgc/{RAKUTEN_AFFILIATE_ID}/?pc={rakuten_target}"
+    buttons = [
+        (mercari_url, "🔍 メルカリで価格を確認する"),
+        (amazon_url, "🔍 Amazonで価格を確認する"),
+        (rakuten_url, "🔍 楽天市場で価格を確認する"),
+    ]
+    links = "".join(
+        f'<a class="marketplace-check-btn" href="{url}" target="_blank" rel="nofollow noopener sponsored">{label} <span class="pr-label">PR</span></a>'
+        for url, label in buttons
+    )
+    return f'<div class="purchase-buttons">{links}</div>'
 
 SITE_BASE_URL = "https://kazuyan340.github.io/onepiece-tcg-market"
 SITE_DIR = Path(__file__).parent / "site"
@@ -112,6 +138,7 @@ def _card_page_html(card: dict, price_info: dict | None) -> str:
     image_url = card.get("image_url") or ""
 
     price_stats_html, price_table_html = _static_price_html(price_info)
+    purchase_buttons_html = _purchase_buttons_html(card["name"], card["id"], card.get("rarity"))
     price_empty_hidden = "hidden" if price_info else ""
 
     ability_html = ""
@@ -199,6 +226,7 @@ def _card_page_html(card: dict, price_info: dict | None) -> str:
       <h3>相場</h3>
       {price_stats_html}
       {price_table_html}
+      {purchase_buttons_html}
       <div class="price-chart-col">
         <div class="period-tabs hidden" id="period-tabs">
           <button type="button" class="period-tab" data-days="0">全期間</button>

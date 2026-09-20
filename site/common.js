@@ -90,6 +90,51 @@ function shopLinkUrl(site, cardNum) {
   return builder ? builder(cardNum) : null;
 }
 
+// ---- メルカリ・Amazon・楽天市場の「価格を確認する」ボタン(スクレイピング対象外の
+// 一般マーケットプレイス向け。アフィリエイトIDはconan-tcg-marketと共用) ----
+const MERCARI_AFFILIATE_ID = "8969530097";
+
+function mercariAffiliateUrl(query) {
+  return `https://jp.mercari.com/search?afid=${MERCARI_AFFILIATE_ID}&keyword=${encodeURIComponent(query)}`;
+}
+
+function mercariButtonHtml(cardName, cardId, cardRarity) {
+  if (!cardName) return "";
+  const query = `${cardName} ${cardId || ""} ${cardRarity || ""}`.replace(/\s+/g, " ").trim();
+  return `<a class="marketplace-check-btn" href="${mercariAffiliateUrl(query)}" target="_blank" rel="nofollow noopener sponsored">🔍 メルカリで価格を確認する <span class="pr-label">PR</span></a>`;
+}
+
+const AMAZON_ASSOCIATE_TAG = "conantcgmarke-22";
+
+function amazonCardSearchUrl(query) {
+  const url = `https://www.amazon.co.jp/s?k=${encodeURIComponent(query)}`;
+  return AMAZON_ASSOCIATE_TAG ? `${url}&tag=${AMAZON_ASSOCIATE_TAG}` : url;
+}
+
+function amazonButtonHtml(cardName, cardId, cardRarity) {
+  if (!cardName) return "";
+  const query = `${cardName} ${cardId || ""} ${cardRarity || ""}`.replace(/\s+/g, " ").trim();
+  return `<a class="marketplace-check-btn" href="${amazonCardSearchUrl(query)}" target="_blank" rel="nofollow noopener sponsored">🔍 Amazonで価格を確認する <span class="pr-label">PR</span></a>`;
+}
+
+const RAKUTEN_AFFILIATE_ID = "567cd45a.2625f6eb.567cd45b.7e49c506";
+
+function rakutenCardSearchUrl(query) {
+  const url = `https://search.rakuten.co.jp/search/mall/${encodeURIComponent(query)}/`;
+  if (!RAKUTEN_AFFILIATE_ID) return url;
+  return `https://hb.afl.rakuten.co.jp/hgc/${RAKUTEN_AFFILIATE_ID}/?pc=${encodeURIComponent(url)}`;
+}
+
+function rakutenButtonHtml(cardName, cardId, cardRarity) {
+  if (!cardName) return "";
+  const query = `${cardName} ${cardId || ""} ${cardRarity || ""}`.replace(/\s+/g, " ").trim();
+  return `<a class="marketplace-check-btn" href="${rakutenCardSearchUrl(query)}" target="_blank" rel="nofollow noopener sponsored">🔍 楽天市場で価格を確認する <span class="pr-label">PR</span></a>`;
+}
+
+function purchaseButtonsHtml(cardName, cardId, cardRarity) {
+  return `<div class="purchase-buttons">${mercariButtonHtml(cardName, cardId, cardRarity)}${amazonButtonHtml(cardName, cardId, cardRarity)}${rakutenButtonHtml(cardName, cardId, cardRarity)}</div>`;
+}
+
 // ---- カードタイル(一覧・ランキング・値動き等で共用) ----
 function statRow(label, value) {
   if (value === null || value === undefined || value === "") return "";
@@ -143,8 +188,9 @@ function fetchPriceHistory(cardId) {
 
 function priceSection(card, pricesLatest) {
   const priceInfo = pricesLatest[card.id];
+  const purchaseButtons = purchaseButtonsHtml(card.name, card.id, card.rarity);
   if (!priceInfo) {
-    return `<div class="info-block price-block"><h3>相場</h3><p class="price-empty">価格データがありません。</p></div>`;
+    return `<div class="info-block price-block"><h3>相場</h3><p class="price-empty">価格データがありません。</p>${purchaseButtons}</div>`;
   }
   const updatedAt = new Date(priceInfo.best.recorded_at).toLocaleDateString("ja-JP");
   const shopRows = priceInfo.shops
@@ -167,6 +213,7 @@ function priceSection(card, pricesLatest) {
       <h3>相場(最終取得: ${updatedAt})</h3>
       <div class="price-best">¥${priceInfo.best.price.toLocaleString()}〜 (${priceInfo.best.site}) / 全ショップ平均 ¥${priceInfo.pooled_avg.toLocaleString()}</div>
       ${shopRows}
+      ${purchaseButtons}
       <div class="price-chart-col">
         <div class="period-tabs" id="period-tabs">
           <button type="button" class="period-tab" data-days="0">全期間</button>
