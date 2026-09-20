@@ -1,5 +1,116 @@
 /* ワンピースカードゲーム カード図鑑 — 各ページ共通のヘルパー
-   (データ読み込み、カードタイル、モーダル、お気に入り、ナビ開閉)。 */
+   (データ読み込み、カードタイル、モーダル、お気に入り、ナビ開閉、絞り込み)。 */
+
+// ---- 効果キーワードでの絞り込み(公式の太字キーワード能力のうち、絞り込みに
+// 意味があるもの=単なるタイミング指定("登場時"等)ではなく特徴的な能力だけを
+// 対象にする。実データ(ability_text/trigger_text)から実際に頻出することを
+// 確認済みの表記のみ採用)。 ----
+const ABILITY_KEYWORDS = ["ブロッカー", "ダブルアタック", "バニッシュ", "速攻", "ブロック不可"];
+
+function abilityKeywordsForCard(card) {
+  const text = `${card.ability_text || ""} ${card.trigger_text || ""}`;
+  return ABILITY_KEYWORDS.filter((kw) => text.includes(kw));
+}
+
+// ---- 収録パックのグループ分け・並び順(ブースターパック→エクストラブースター→
+// プレミアムブースター→スタートデッキ→その他、各グループ内は新しい弾番号が先) ----
+const PACK_GROUP_ORDER = ["booster", "extra", "premium", "start", "other"];
+const PACK_GROUP_LABELS = {
+  booster: "ブースターパック", extra: "エクストラブースター",
+  premium: "プレミアムブースター", start: "スタートデッキ", other: "その他",
+};
+const PACK_CODE_PATTERN = /【([A-Z]+)-?(\d+)】/;
+const PACK_GROUP_BY_CODE = { OP: "booster", EB: "extra", PRB: "premium", ST: "start" };
+
+function packGroupFor(packValue) {
+  const m = PACK_CODE_PATTERN.exec(packValue || "");
+  return (m && PACK_GROUP_BY_CODE[m[1]]) || "other";
+}
+
+function packNumberFor(packValue) {
+  const m = PACK_CODE_PATTERN.exec(packValue || "");
+  return m ? Number(m[2]) : -1;
+}
+
+function sortPackValues(values) {
+  values.sort((a, b) => {
+    const ga = PACK_GROUP_ORDER.indexOf(packGroupFor(a));
+    const gb = PACK_GROUP_ORDER.indexOf(packGroupFor(b));
+    if (ga !== gb) return ga - gb;
+    return packNumberFor(b) - packNumberFor(a);
+  });
+}
+
+// ---- 3値(含む/除外/指定なし)の絞り込みチェックボックス。クリックのたびに
+// 指定なし→含む→除外→指定なしと状態が変わる。valuesがgroupFnで分類できる
+// 場合は見出しを挟んでグループ表示する(収録パック用)。 ----
+function buildTriStateList(containerId, values, includeSet, excludeSet, onChange, groupFn) {
+  const container = document.getElementById(containerId);
+  const frag = document.createDocumentFragment();
+  let lastGroup = null;
+
+  function stateOf(value) {
+    if (includeSet.has(value)) return "include";
+    if (excludeSet.has(value)) return "exclude";
+    return "none";
+  }
+
+  function applyVisual(btn, value) {
+    const state = stateOf(value);
+    btn.dataset.state = state;
+    btn.textContent = (state === "include" ? "✅ " : state === "exclude" ? "🚫 " : "☐ ") + value;
+  }
+
+  for (const value of values) {
+    if (!value) continue;
+    if (groupFn) {
+      const g = groupFn(value);
+      if (g !== lastGroup) {
+        const heading = document.createElement("div");
+        heading.className = "checkbox-list-heading";
+        heading.textContent = PACK_GROUP_LABELS[g] || g;
+        frag.appendChild(heading);
+        lastGroup = g;
+      }
+    }
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "tri-filter-item";
+    applyVisual(btn, value);
+    btn.addEventListener("click", () => {
+      const state = stateOf(value);
+      if (state === "none") {
+        includeSet.add(value);
+      } else if (state === "include") {
+        includeSet.delete(value);
+        excludeSet.add(value);
+      } else {
+        excludeSet.delete(value);
+      }
+      applyVisual(btn, value);
+      onChange();
+    });
+    frag.appendChild(btn);
+  }
+  container.replaceChildren(frag);
+}
+
+function resetTriState(includeSet, excludeSet) {
+  includeSet.clear();
+  excludeSet.clear();
+}
+
+function matchesTriState(value, includeSet, excludeSet) {
+  if (excludeSet.has(value)) return false;
+  if (includeSet.size > 0) return includeSet.has(value);
+  return true;
+}
+
+function matchesTriStateArray(cardValues, includeSet, excludeSet) {
+  if ([...excludeSet].some((v) => cardValues.includes(v))) return false;
+  if (includeSet.size > 0) return [...includeSet].some((v) => cardValues.includes(v));
+  return true;
+}
 
 function escapeHtml(str) {
   const div = document.createElement("div");

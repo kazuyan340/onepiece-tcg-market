@@ -49,7 +49,26 @@
       <summary>収録パック<span class="count-badge hidden"></span></summary>
       <div class="checkbox-list" id="filter-pack-list"></div>
     </details>
+    <details class="filter-group" id="filter-keyword-group">
+      <summary>効果キーワード<span class="count-badge hidden"></span></summary>
+      <div class="checkbox-list" id="filter-keyword-list"></div>
+    </details>
     <button type="button" id="reset-filters" class="filter-reset-btn">↺ 条件をリセット</button>
+  </div>
+  <div class="sort-row">
+    <label for="sort-select">並び替え</label>
+    <select id="sort-select">
+      <option value="price_desc">価格順(高い順)</option>
+      <option value="price_asc">価格順(安い順)</option>
+      <option value="id_asc">ID順</option>
+      <option value="id_desc">ID順(降順)</option>
+      <option value="cost_desc">コスト順(高い順)</option>
+      <option value="cost_asc">コスト順(低い順)</option>
+      <option value="power_desc">パワー順(高い順)</option>
+      <option value="power_asc">パワー順(低い順)</option>
+      <option value="counter_desc">カウンター順(高い順)</option>
+      <option value="counter_asc">カウンター順(低い順)</option>
+    </select>
   </div>
   <p id="result-count" class="result-count"></p>
 </header>

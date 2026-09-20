@@ -7,10 +7,11 @@
 
   const state = {
     keyword: "",
-    colors: new Set(),
-    types: new Set(),
-    rarities: new Set(),
-    packs: new Set(),
+    colors: { include: new Set(), exclude: new Set() },
+    types: { include: new Set(), exclude: new Set() },
+    rarities: { include: new Set(), exclude: new Set() },
+    packs: { include: new Set(), exclude: new Set() },
+    keywords: { include: new Set(), exclude: new Set() },
   };
 
   const grid = document.getElementById("card-grid");
@@ -24,10 +25,11 @@
         .filter(Boolean).join(" ");
       if (!haystack.includes(kw)) return false;
     }
-    if (state.colors.size && !state.colors.has(card.color)) return false;
-    if (state.types.size && !state.types.has(card.card_type)) return false;
-    if (state.rarities.size && !state.rarities.has(card.rarity)) return false;
-    if (state.packs.size && !state.packs.has(card.pack)) return false;
+    if (!matchesTriState(card.color, state.colors.include, state.colors.exclude)) return false;
+    if (!matchesTriState(card.card_type, state.types.include, state.types.exclude)) return false;
+    if (!matchesTriState(card.rarity, state.rarities.include, state.rarities.exclude)) return false;
+    if (!matchesTriState(card.pack, state.packs.include, state.packs.exclude)) return false;
+    if (!matchesTriStateArray(abilityKeywordsForCard(card), state.keywords.include, state.keywords.exclude)) return false;
     return true;
   }
 
@@ -42,38 +44,24 @@
     grid.replaceChildren(frag);
   }
 
-  function buildCheckboxList(containerId, values, targetSet) {
-    const container = document.getElementById(containerId);
-    const frag = document.createDocumentFragment();
-    for (const value of values) {
-      if (!value) continue;
-      const label = document.createElement("label");
-      label.className = "checkbox-item";
-      const input = document.createElement("input");
-      input.type = "checkbox";
-      input.value = value;
-      input.addEventListener("change", () => {
-        if (input.checked) targetSet.add(value);
-        else targetSet.delete(value);
-        renderGrid();
-      });
-      label.appendChild(input);
-      label.appendChild(document.createTextNode(" " + value));
-      frag.appendChild(label);
-    }
-    container.replaceChildren(frag);
+  function buildAllFilterLists(meta) {
+    buildTriStateList("filter-color-list", meta.colors, state.colors.include, state.colors.exclude, renderGrid);
+    buildTriStateList("filter-type-list", meta.card_types, state.types.include, state.types.exclude, renderGrid);
+    buildTriStateList("filter-rarity-list", meta.rarities, state.rarities.include, state.rarities.exclude, renderGrid);
+    const packValues = [...meta.packs];
+    sortPackValues(packValues);
+    buildTriStateList("filter-pack-list", packValues, state.packs.include, state.packs.exclude, renderGrid, packGroupFor);
+    buildTriStateList("filter-keyword-list", ABILITY_KEYWORDS, state.keywords.include, state.keywords.exclude, renderGrid);
   }
 
-  function resetFilters() {
+  function resetFilters(meta) {
     state.keyword = "";
-    state.colors.clear();
-    state.types.clear();
-    state.rarities.clear();
-    state.packs.clear();
     keywordInput.value = "";
-    document.querySelectorAll(".checkbox-list input[type=checkbox]").forEach((el) => {
-      el.checked = false;
-    });
+    for (const key of ["colors", "types", "rarities", "packs", "keywords"]) {
+      state[key].include.clear();
+      state[key].exclude.clear();
+    }
+    buildAllFilterLists(meta);
     renderGrid();
   }
 
@@ -87,11 +75,7 @@
     pricesLatest = prices;
     renderLastUpdated();
 
-    buildCheckboxList("filter-color-list", meta.colors, state.colors);
-    buildCheckboxList("filter-type-list", meta.card_types, state.types);
-    buildCheckboxList("filter-rarity-list", meta.rarities, state.rarities);
-    buildCheckboxList("filter-pack-list", meta.packs, state.packs);
-
+    buildAllFilterLists(meta);
     renderGrid();
 
     keywordInput.addEventListener("input", () => {
@@ -99,7 +83,7 @@
       renderGrid();
     });
 
-    document.getElementById("reset-filters").addEventListener("click", resetFilters);
+    document.getElementById("reset-filters").addEventListener("click", () => resetFilters(meta));
     bindModalEvents();
     bindFiltersToggle();
     bindNavMenuToggle();

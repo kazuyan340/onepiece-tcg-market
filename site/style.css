@@ -117,6 +117,52 @@ body {
   white-space: nowrap;
 }
 
+.checkbox-list-heading {
+  flex-basis: 100%;
+  font-size: 0.7rem;
+  color: var(--text-dim);
+  margin-top: 4px;
+  border-bottom: 1px solid var(--border);
+}
+
+.tri-filter-item {
+  font-size: 0.8rem;
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-dim);
+  padding: 2px 8px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.tri-filter-item[data-state="include"] {
+  color: #7fd97f;
+  border-color: #7fd97f;
+}
+
+.tri-filter-item[data-state="exclude"] {
+  color: #e6797f;
+  border-color: #e6797f;
+  text-decoration: line-through;
+}
+
+.sort-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  font-size: 0.82rem;
+}
+
+.sort-row select {
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: #0f2233;
+  color: var(--text);
+}
+
 .result-count {
   margin: 8px 0 0;
   font-size: 0.8rem;

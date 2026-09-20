@@ -1,4 +1,4 @@
-/* 相場ランキング(全ショップ平均価格が高い順)。フィルタはapp.js(一覧)と同じ項目。 */
+/* 相場ランキング(既定は全ショップ平均価格が高い順)。フィルタ・並び替えともにapp.jsと同じ考え方。 */
 (function () {
   "use strict";
 
@@ -7,15 +7,17 @@
 
   const state = {
     keyword: "",
-    colors: new Set(),
-    types: new Set(),
-    rarities: new Set(),
-    packs: new Set(),
+    colors: { include: new Set(), exclude: new Set() },
+    types: { include: new Set(), exclude: new Set() },
+    rarities: { include: new Set(), exclude: new Set() },
+    packs: { include: new Set(), exclude: new Set() },
+    keywords: { include: new Set(), exclude: new Set() },
   };
 
   const grid = document.getElementById("card-grid");
   const resultCount = document.getElementById("result-count");
   const keywordInput = document.getElementById("keyword");
+  const sortSelect = document.getElementById("sort-select");
 
   function cardMatches(card) {
     if (state.keyword) {
@@ -24,61 +26,68 @@
         .filter(Boolean).join(" ");
       if (!haystack.includes(kw)) return false;
     }
-    if (state.colors.size && !state.colors.has(card.color)) return false;
-    if (state.types.size && !state.types.has(card.card_type)) return false;
-    if (state.rarities.size && !state.rarities.has(card.rarity)) return false;
-    if (state.packs.size && !state.packs.has(card.pack)) return false;
+    if (!matchesTriState(card.color, state.colors.include, state.colors.exclude)) return false;
+    if (!matchesTriState(card.card_type, state.types.include, state.types.exclude)) return false;
+    if (!matchesTriState(card.rarity, state.rarities.include, state.rarities.exclude)) return false;
+    if (!matchesTriState(card.pack, state.packs.include, state.packs.exclude)) return false;
+    if (!matchesTriStateArray(abilityKeywordsForCard(card), state.keywords.include, state.keywords.exclude)) return false;
     return true;
   }
 
+  function sortEntries(entries) {
+    const [field, dir] = sortSelect.value.split("_");
+    const mul = dir === "asc" ? 1 : -1;
+    entries.sort((a, b) => {
+      let va, vb;
+      if (field === "price") {
+        va = a.price;
+        vb = b.price;
+      } else if (field === "id") {
+        return a.card.id.localeCompare(b.card.id) * mul;
+      } else {
+        va = a.card[field] ?? -Infinity;
+        vb = b.card[field] ?? -Infinity;
+      }
+      return (va - vb) * mul;
+    });
+  }
+
   function renderGrid() {
-    const ranked = allCards
+    const entries = allCards
       .filter(cardMatches)
       .filter((c) => pricesLatest[c.id])
-      .sort((a, b) => pricesLatest[b.id].pooled_avg - pricesLatest[a.id].pooled_avg);
+      .map((card) => ({ card, price: pricesLatest[card.id].pooled_avg }));
 
-    resultCount.textContent = `${ranked.length}件(価格データがあるカードのみ)`;
+    sortEntries(entries);
+    resultCount.textContent = `${entries.length}件(価格データがあるカードのみ)`;
 
     const frag = document.createDocumentFragment();
-    ranked.forEach((card, i) => {
-      const badge = `<div class="trend-badge">#${i + 1}　¥${pricesLatest[card.id].pooled_avg.toLocaleString()}</div>`;
+    entries.forEach(({ card, price }, i) => {
+      const badge = `<div class="trend-badge">#${i + 1}　¥${price.toLocaleString()}</div>`;
       frag.appendChild(createCardTile(card, pricesLatest, badge));
     });
     grid.replaceChildren(frag);
   }
 
-  function buildCheckboxList(containerId, values, targetSet) {
-    const container = document.getElementById(containerId);
-    const frag = document.createDocumentFragment();
-    for (const value of values) {
-      if (!value) continue;
-      const label = document.createElement("label");
-      label.className = "checkbox-item";
-      const input = document.createElement("input");
-      input.type = "checkbox";
-      input.value = value;
-      input.addEventListener("change", () => {
-        if (input.checked) targetSet.add(value);
-        else targetSet.delete(value);
-        renderGrid();
-      });
-      label.appendChild(input);
-      label.appendChild(document.createTextNode(" " + value));
-      frag.appendChild(label);
-    }
-    container.replaceChildren(frag);
+  function buildAllFilterLists(meta) {
+    buildTriStateList("filter-color-list", meta.colors, state.colors.include, state.colors.exclude, renderGrid);
+    buildTriStateList("filter-type-list", meta.card_types, state.types.include, state.types.exclude, renderGrid);
+    buildTriStateList("filter-rarity-list", meta.rarities, state.rarities.include, state.rarities.exclude, renderGrid);
+    const packValues = [...meta.packs];
+    sortPackValues(packValues);
+    buildTriStateList("filter-pack-list", packValues, state.packs.include, state.packs.exclude, renderGrid, packGroupFor);
+    buildTriStateList("filter-keyword-list", ABILITY_KEYWORDS, state.keywords.include, state.keywords.exclude, renderGrid);
   }
 
-  function resetFilters() {
+  function resetFilters(meta) {
     state.keyword = "";
-    state.colors.clear();
-    state.types.clear();
-    state.rarities.clear();
-    state.packs.clear();
     keywordInput.value = "";
-    document.querySelectorAll(".checkbox-list input[type=checkbox]").forEach((el) => {
-      el.checked = false;
-    });
+    sortSelect.value = "price_desc";
+    for (const key of ["colors", "types", "rarities", "packs", "keywords"]) {
+      state[key].include.clear();
+      state[key].exclude.clear();
+    }
+    buildAllFilterLists(meta);
     renderGrid();
   }
 
@@ -92,19 +101,16 @@
     pricesLatest = prices;
     renderLastUpdated();
 
-    buildCheckboxList("filter-color-list", meta.colors, state.colors);
-    buildCheckboxList("filter-type-list", meta.card_types, state.types);
-    buildCheckboxList("filter-rarity-list", meta.rarities, state.rarities);
-    buildCheckboxList("filter-pack-list", meta.packs, state.packs);
-
+    buildAllFilterLists(meta);
     renderGrid();
 
     keywordInput.addEventListener("input", () => {
       state.keyword = keywordInput.value.trim();
       renderGrid();
     });
+    sortSelect.addEventListener("change", renderGrid);
 
-    document.getElementById("reset-filters").addEventListener("click", resetFilters);
+    document.getElementById("reset-filters").addEventListener("click", () => resetFilters(meta));
     bindModalEvents();
     bindFiltersToggle();
     bindNavMenuToggle();
