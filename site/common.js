@@ -112,6 +112,34 @@ function matchesTriStateArray(cardValues, includeSet, excludeSet) {
   return true;
 }
 
+// ---- 値動き系ページ(trends.html/movers-up.html/movers-down.html)で共有する、
+// ショップ別タブ切り替え。「全体」は5ショップの単純平均価格の推移が基準。 ----
+const TREND_SITES = ["全体", "カードラボ", "まんぞく屋", "わいTV", "駿河屋", "カードラッシュ"];
+
+function createSiteTabController(containerId, onChange) {
+  let selectedSite = TREND_SITES[0];
+
+  function render() {
+    const container = document.getElementById(containerId);
+    container.innerHTML = "";
+    for (const site of TREND_SITES) {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "site-tab" + (site === selectedSite ? " active" : "");
+      btn.textContent = site;
+      btn.addEventListener("click", () => {
+        selectedSite = site;
+        render();
+        onChange(selectedSite);
+      });
+      container.appendChild(btn);
+    }
+  }
+
+  render();
+  return { getSite: () => selectedSite };
+}
+
 function escapeHtml(str) {
   const div = document.createElement("div");
   div.textContent = str ?? "";
@@ -297,14 +325,9 @@ function fetchPriceHistory(cardId) {
   return promise;
 }
 
-function priceSection(card, pricesLatest) {
-  const priceInfo = pricesLatest[card.id];
-  const purchaseButtons = purchaseButtonsHtml(card.name, card.id, card.rarity);
-  if (!priceInfo) {
-    return `<div class="info-block price-block"><h3>相場</h3><p class="price-empty">価格データがありません。</p>${purchaseButtons}</div>`;
-  }
-  const updatedAt = new Date(priceInfo.best.recorded_at).toLocaleDateString("ja-JP");
-  const shopRows = priceInfo.shops
+function shopTableHtml(card, priceInfo) {
+  if (!priceInfo) return "";
+  return priceInfo.shops
     .slice()
     .sort((a, b) => a.price - b.price)
     .map((shop) => {
@@ -319,11 +342,28 @@ function priceSection(card, pricesLatest) {
         </div>
       `;
     }).join("");
+}
+
+function priceStatsHtml(priceInfo) {
+  if (!priceInfo) return "";
+  const updatedAt = new Date(priceInfo.best.recorded_at).toLocaleDateString("ja-JP");
+  return `
+    <div class="price-best">¥${priceInfo.best.price.toLocaleString()}〜 (${priceInfo.best.site}) / 全ショップ平均 ¥${priceInfo.pooled_avg.toLocaleString()}</div>
+    <div class="price-avg-date">最終取得: ${updatedAt}</div>
+  `;
+}
+
+function priceSection(card, pricesLatest) {
+  const priceInfo = pricesLatest[card.id];
+  const purchaseButtons = purchaseButtonsHtml(card.name, card.id, card.rarity);
+  if (!priceInfo) {
+    return `<div class="info-block price-block"><h3>相場</h3><p class="price-empty">価格データがありません。</p>${purchaseButtons}</div>`;
+  }
   return `
     <div class="info-block price-block">
-      <h3>相場(最終取得: ${updatedAt})</h3>
-      <div class="price-best">¥${priceInfo.best.price.toLocaleString()}〜 (${priceInfo.best.site}) / 全ショップ平均 ¥${priceInfo.pooled_avg.toLocaleString()}</div>
-      ${shopRows}
+      <h3>相場</h3>
+      ${priceStatsHtml(priceInfo)}
+      ${shopTableHtml(card, priceInfo)}
       ${purchaseButtons}
       <div class="price-chart-col">
         <div class="period-tabs" id="period-tabs">
@@ -352,6 +392,60 @@ function pooledSeriesFromHistory(history) {
       day,
       price: Math.round(prices.reduce((a, b) => a + b, 0) / prices.length),
     }));
+}
+
+// マウスを合わせた点に近い位置にツールチップ(日付・価格)を出す。1つのdiv要素を
+// 使い回す(canvasごとに毎回作らない)。
+let chartTooltipEl = null;
+
+function getChartTooltip() {
+  if (!chartTooltipEl) {
+    chartTooltipEl = document.createElement("div");
+    chartTooltipEl.className = "chart-tooltip";
+    document.body.appendChild(chartTooltipEl);
+  }
+  return chartTooltipEl;
+}
+
+function setupChartHover(canvas, hitPoints) {
+  canvas._chartHitPoints = hitPoints;
+  if (canvas._chartHoverBound) return;
+  canvas._chartHoverBound = true;
+
+  const tooltip = getChartTooltip();
+  const HIT_RADIUS = 12;
+
+  canvas.addEventListener("mousemove", (e) => {
+    const rect = canvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+
+    let nearest = null;
+    let nearestDist = HIT_RADIUS;
+    for (const p of canvas._chartHitPoints || []) {
+      const dist = Math.hypot(p.x - mx, p.y - my);
+      if (dist <= nearestDist) {
+        nearest = p;
+        nearestDist = dist;
+      }
+    }
+
+    if (nearest) {
+      tooltip.textContent = `${nearest.date}: ¥${nearest.price.toLocaleString()}`;
+      tooltip.style.left = `${e.clientX + 12}px`;
+      tooltip.style.top = `${e.clientY + 12}px`;
+      tooltip.style.display = "block";
+      canvas.style.cursor = "pointer";
+    } else {
+      tooltip.style.display = "none";
+      canvas.style.cursor = "default";
+    }
+  });
+
+  canvas.addEventListener("mouseleave", () => {
+    tooltip.style.display = "none";
+    canvas.style.cursor = "default";
+  });
 }
 
 function drawSimpleChart(canvas, points) {
@@ -398,16 +492,22 @@ function drawSimpleChart(canvas, points) {
   ctx.stroke();
 
   ctx.fillStyle = "#ffd166";
+  const hitPoints = [];
   points.forEach((p, i) => {
+    const px = x(i);
+    const py = y(p.price);
     ctx.beginPath();
-    ctx.arc(x(i), y(p.price), 2.5, 0, Math.PI * 2);
+    ctx.arc(px, py, 2.5, 0, Math.PI * 2);
     ctx.fill();
+    hitPoints.push({ x: px, y: py, price: p.price, date: p.day });
   });
 
   ctx.fillStyle = "#a9b4bf";
   ctx.textAlign = "center";
   ctx.fillText(points[0].day.slice(5), x(0), h - 6);
   ctx.fillText(points[points.length - 1].day.slice(5), x(points.length - 1), h - 6);
+
+  setupChartHover(canvas, hitPoints);
 }
 
 function bindPeriodTabs(canvas, series) {
@@ -474,6 +574,7 @@ function openModal(card, pricesLatest) {
       const nowFav = toggleFavorite(card.id);
       favBtn.textContent = nowFav ? "★" : "☆";
       favBtn.classList.toggle("active", nowFav);
+      if (typeof window.onModalFavoriteToggle === "function") window.onModalFavoriteToggle(card);
     };
   }
 

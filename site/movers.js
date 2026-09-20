@@ -1,38 +1,52 @@
 /* 値上がり/値下がり一覧。movers-up.html/movers-down.htmlの両方から
-   window.MOVERS_DIRECTION("up"|"down")で共用する。全ショップ平均価格(「全体」系列)のみ表示。 */
+   window.MOVERS_DIRECTION("up"|"down")で共用する。ショップタブで表示対象を切り替えられる。 */
 (function () {
   "use strict";
 
+  let items = null;
+  let cardsById = null;
+  let pricesLatest = null;
+
+  function render(site) {
+    const filtered = items.filter((i) => i.site === site);
+    const grid = document.getElementById("card-grid");
+    const emptyMsg = document.getElementById("empty-message");
+    document.getElementById("result-count").textContent = `${filtered.length}件`;
+
+    if (filtered.length === 0) {
+      grid.replaceChildren();
+      emptyMsg.classList.remove("hidden");
+      return;
+    }
+    emptyMsg.classList.add("hidden");
+
+    const frag = document.createDocumentFragment();
+    for (const item of filtered) {
+      const card = cardsById.get(item.card_id);
+      if (!card) continue;
+      const sign = item.change_pct > 0 ? "+" : "";
+      const badge = `<div class="trend-badge">${sign}${item.change_pct}%　¥${item.previous_price.toLocaleString()}→¥${item.latest_price.toLocaleString()}</div>`;
+      frag.appendChild(createCardTile(card, pricesLatest, badge));
+    }
+    grid.replaceChildren(frag);
+  }
+
   async function init() {
     const direction = window.MOVERS_DIRECTION;
-    const [cards, meta, pricesLatest, moversRes] = await Promise.all([
+    const [cards, meta, prices, moversRes] = await Promise.all([
       loadCardData(),
       loadSiteMeta(),
       loadPricesLatest(),
       fetchFresh("data/movers.json"),
     ]);
     const movers = await moversRes.json();
-    const cardsById = new Map(cards.map((c) => [c.id, c]));
+    items = movers[direction] || [];
+    cardsById = new Map(cards.map((c) => [c.id, c]));
+    pricesLatest = prices;
     renderLastUpdated();
 
-    const items = (movers[direction] || []).filter((i) => i.site === "全体");
-    const grid = document.getElementById("card-grid");
-    const emptyMsg = document.getElementById("empty-message");
-    document.getElementById("result-count").textContent = `${items.length}件`;
-
-    if (items.length === 0) {
-      emptyMsg.classList.remove("hidden");
-    } else {
-      const frag = document.createDocumentFragment();
-      for (const item of items) {
-        const card = cardsById.get(item.card_id);
-        if (!card) continue;
-        const sign = item.change_pct > 0 ? "+" : "";
-        const badge = `<div class="trend-badge">${sign}${item.change_pct}%　¥${item.previous_price.toLocaleString()}→¥${item.latest_price.toLocaleString()}</div>`;
-        frag.appendChild(createCardTile(card, pricesLatest, badge));
-      }
-      grid.replaceChildren(frag);
-    }
+    createSiteTabController("site-tabs", (site) => render(site));
+    render("全体");
 
     bindModalEvents();
     bindNavMenuToggle();
