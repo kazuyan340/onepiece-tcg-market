@@ -4,6 +4,7 @@ GitHub Pages等の静的ホスティングで動かすため、サイト側は�
 fetchするだけで完結する(サーバーサイド処理は一切不要)。
 """
 import json
+import urllib.parse
 from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
@@ -12,6 +13,41 @@ import db
 import images
 
 SITE_DATA_DIR = Path(__file__).parent / "site" / "data"
+
+# Amazonアソシエイト/楽天アフィリエイトのトラッキングID(site/common.jsのAMAZON_ASSOCIATE_TAG/
+# RAKUTEN_AFFILIATE_IDと共用)。
+AMAZON_ASSOCIATE_TAG = "conantcgmarke-22"
+RAKUTEN_AFFILIATE_ID = "567cd45a.2625f6eb.567cd45b.7e49c506"
+
+
+def _amazon_search_url(keyword: str) -> str:
+    url = f"https://www.amazon.co.jp/s?k={urllib.parse.quote(keyword)}"
+    return f"{url}&tag={AMAZON_ASSOCIATE_TAG}" if AMAZON_ASSOCIATE_TAG else url
+
+
+def _rakuten_search_url(keyword: str) -> str:
+    target = f"https://search.rakuten.co.jp/search/mall/{urllib.parse.quote(keyword)}/"
+    if not RAKUTEN_AFFILIATE_ID:
+        return target
+    return f"https://hb.afl.rakuten.co.jp/hgc/{RAKUTEN_AFFILIATE_ID}/?pc={urllib.parse.quote(target, safe='')}"
+
+
+def export_goods(conn) -> list[dict]:
+    rows = conn.execute(
+        "SELECT title, category, category_label, tag, price_text, price_yen, "
+        "release_date, image_url, detail_url FROM goods ORDER BY release_date DESC, id DESC"
+    ).fetchall()
+    result = []
+    for row in rows:
+        item = dict(row)
+        local_name = images.goods_local_filename(item["detail_url"], item["image_url"])
+        # カード画像と同様、商品画像もパスによっては直リンクがブロックされるため
+        # 一律で自サイト内の画像を参照させる。
+        item["image_url"] = f"images/goods/{local_name}" if local_name else None
+        item["amazon_url"] = _amazon_search_url(item["title"])
+        item["rakuten_url"] = _rakuten_search_url(item["title"])
+        result.append(item)
+    return result
 
 CARD_FIELDS = [
     "id", "card_num", "name", "card_type", "rarity", "color", "cost", "life",
@@ -278,6 +314,7 @@ def export_static() -> None:
         all_series = _all_price_series(conn)
         trends = compute_trends(all_series)
         movers = compute_movers(all_series)
+        goods = export_goods(conn)
     finally:
         conn.close()
 
@@ -297,9 +334,12 @@ def export_static() -> None:
     (SITE_DATA_DIR / "movers.json").write_text(
         json.dumps(movers, ensure_ascii=False, separators=(",", ":")), encoding="utf-8"
     )
+    (SITE_DATA_DIR / "goods.json").write_text(
+        json.dumps(goods, ensure_ascii=False), encoding="utf-8"
+    )
     print(
         f"site/data/cards.json, meta.json, prices_latest.json({len(prices_latest)}件), "
-        f"prices/({per_card_count}件), trends.json, movers.json を書き出しました。"
+        f"prices/({per_card_count}件), trends.json, movers.json, goods.json({len(goods)}件) を書き出しました。"
     )
 
 

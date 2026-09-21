@@ -994,6 +994,98 @@ body {
   color: var(--accent);
 }
 
+.goods-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 14px;
+  padding: 16px;
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+.goods-tile {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px;
+  text-align: center;
+}
+
+.goods-tile img {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  object-fit: contain;
+  border-radius: 6px;
+  background: #fff;
+}
+
+.goods-title {
+  font-weight: bold;
+  font-size: 0.85rem;
+  margin: 8px 0 2px;
+}
+
+.goods-meta {
+  font-size: 0.75rem;
+  color: var(--text-dim);
+  margin-bottom: 8px;
+}
+
+.goods-links {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.goods-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 6px 10px;
+  border-radius: 20px;
+  font-size: 0.78rem;
+  font-weight: bold;
+  color: #fff;
+  text-decoration: none;
+}
+
+.goods-link.official {
+  background: #3a4a5c;
+}
+
+.goods-link.official:hover {
+  background: #2b3a4a;
+}
+
+.goods-link.amazon {
+  background: #ff9900;
+}
+
+.goods-link.amazon:hover {
+  background: #e08600;
+}
+
+.goods-link.rakuten {
+  background: #bf0000;
+}
+
+.goods-link.rakuten:hover {
+  background: #990000;
+}
+
+.goods-link .pr-label {
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.6);
+}
+
+.goods-filter-row {
+  display: flex;
+  gap: 6px;
+  padding: 0 16px 8px;
+  flex-wrap: wrap;
+}
+
 .site-disclaimer {
   padding: 16px;
   font-size: 0.72rem;

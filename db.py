@@ -44,6 +44,21 @@ CREATE TABLE IF NOT EXISTS price_history (
     FOREIGN KEY (card_id) REFERENCES cards(id)
 );
 
+CREATE TABLE IF NOT EXISTS goods (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    title TEXT NOT NULL,
+    category TEXT,
+    category_label TEXT,
+    tag TEXT,
+    price_text TEXT,
+    price_yen INTEGER,
+    release_date TEXT,
+    image_url TEXT,
+    detail_url TEXT,
+    fetched_at TEXT,
+    UNIQUE(title, detail_url)
+);
+
 CREATE INDEX IF NOT EXISTS idx_cards_name ON cards(name);
 CREATE INDEX IF NOT EXISTS idx_cards_card_num ON cards(card_num);
 CREATE INDEX IF NOT EXISTS idx_price_card ON price_history(card_id);
@@ -156,3 +171,44 @@ def get_price_history(conn: sqlite3.Connection, card_id: str) -> list[sqlite3.Ro
     return conn.execute(
         "SELECT * FROM price_history WHERE card_id = ? ORDER BY recorded_at", (card_id,)
     ).fetchall()
+
+
+GOODS_COLUMNS = [
+    "title", "category", "category_label", "tag", "price_text", "price_yen",
+    "release_date", "image_url", "detail_url",
+]
+
+
+def upsert_goods(conn: sqlite3.Connection, items: list[dict]) -> dict:
+    """拡張パック/デッキ/周辺グッズを一括upsertする。(title, detail_url)をキーに
+    重複排除する。新規/更新件数を返す。"""
+    new_count = 0
+    updated_count = 0
+    now = datetime.now(timezone.utc).isoformat()
+
+    placeholders = ", ".join(f":{c}" for c in GOODS_COLUMNS)
+    assignments = ", ".join(f"{c}=excluded.{c}" for c in GOODS_COLUMNS if c not in ("title", "detail_url"))
+
+    sql = f"""
+        INSERT INTO goods ({", ".join(GOODS_COLUMNS)}, fetched_at)
+        VALUES ({placeholders}, :fetched_at)
+        ON CONFLICT(title, detail_url) DO UPDATE SET {assignments}, fetched_at=excluded.fetched_at
+        WHERE excluded.price_text IS NOT goods.price_text
+    """
+
+    for item in items:
+        if not item.get("detail_url"):
+            continue
+        existing = conn.execute(
+            "SELECT price_text FROM goods WHERE title = ? AND detail_url = ?",
+            (item["title"], item["detail_url"]),
+        ).fetchone()
+        row = {**item, "fetched_at": now}
+        conn.execute(sql, row)
+        if existing is None:
+            new_count += 1
+        elif existing["price_text"] != item.get("price_text"):
+            updated_count += 1
+
+    conn.commit()
+    return {"new": new_count, "updated": updated_count, "total": len(items)}

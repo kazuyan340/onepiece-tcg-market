@@ -98,10 +98,13 @@ jobs:
       - name: Fetch prices from Cardrush
         run: python scraper_prices_cardrush.py
 
+      - name: Fetch official goods/products list
+        run: python scraper_goods.py
+
       - name: Build unresolved shop-listing report
         run: python build_unresolved_report.py
 
-      - name: Download newly added card images
+      - name: Download newly added card and goods images
         run: python images.py
 
       - name: Export static JSON for the site
