@@ -1093,4 +1093,232 @@ body {
   text-align: center;
 }
 
+/* デッキ作成ページ (conan-tcg-market/pokemon-tcg-marketのデッキビルダーを
+   ワンピースカードゲームのルール(リーダー1枚+デッキ50枚)に合わせて移植) */
+.deck-layout {
+  display: grid;
+  grid-template-columns: 560px 560px;
+  justify-content: center;
+  gap: 12px;
+  align-items: start;
+  padding: 10px 20px 24px;
+}
+
+.deck-main h3 {
+  font-size: 0.78rem;
+  color: var(--text-dim);
+  margin: 10px 0 4px;
+}
+
+.deck-hint {
+  font-size: 0.66rem;
+  font-weight: normal;
+  color: var(--text-dim);
+}
+
+.deck-legality-note {
+  margin: 0;
+}
+
+.deck-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 8px;
+}
+
+.deck-count {
+  font-size: 0.76rem;
+  color: var(--text-dim);
+}
+
+.deck-count-ok {
+  color: #7fd97f;
+  font-weight: bold;
+}
+
+.deck-count-warn {
+  color: #e6797f;
+  font-weight: bold;
+}
+
+.deck-total {
+  font-size: 0.95rem;
+  font-weight: bold;
+  color: var(--accent);
+  margin-right: auto;
+}
+
+.deck-total-toggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.72rem;
+  color: var(--text-dim);
+  cursor: pointer;
+}
+
+.deck-summary .reset-btn {
+  padding: 3px 8px;
+  font-size: 0.72rem;
+}
+
+.deck-top-slots {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  margin-bottom: 6px;
+}
+
+.deck-slot-section {
+  flex: 0 0 auto;
+}
+
+.deck-slot-section h3 {
+  margin: 0 0 4px;
+}
+
+.deck-leader-info {
+  max-width: 320px;
+}
+
+/* リーダー1枚、およびデッキの1枠(1枚)を表すカード形の箱。 */
+.deck-slot-box {
+  position: relative;
+  aspect-ratio: 5 / 7;
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--surface);
+  cursor: pointer;
+}
+
+.deck-slot-box.empty {
+  border: 2px dashed var(--border);
+}
+
+.deck-slot-box img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.leader-slot {
+  width: 88px;
+}
+
+.deck-slot-clear {
+  position: absolute;
+  top: 1px;
+  right: 1px;
+  width: 16px;
+  height: 16px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff;
+  font-size: 0.65rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.deck-main-grid {
+  display: grid;
+  grid-template-columns: repeat(10, 1fr);
+  gap: 4px;
+  max-width: 500px;
+}
+
+.deck-search-panel {
+  position: sticky;
+  top: 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px;
+  max-height: calc(100vh - 24px);
+  overflow-y: auto;
+  font-size: 0.85rem;
+}
+
+.deck-search-panel .filter-item {
+  margin-bottom: 6px;
+}
+
+.deck-search-panel input[type="text"] {
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: #0f2233;
+  color: var(--text);
+  font-size: 0.95rem;
+}
+
+.deck-zone-tabs {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.deck-search-grid {
+  padding: 0;
+  margin-top: 8px;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 6px;
+}
+
+.deck-search-grid .card-tile {
+  padding: 3px;
+}
+
+.deck-tile-img-wrap {
+  position: relative;
+  line-height: 0;
+}
+
+.deck-tile-img-wrap img {
+  width: 100%;
+  aspect-ratio: 5 / 7;
+  object-fit: cover;
+  border-radius: 4px;
+  background: #05121e;
+}
+
+.deck-info-btn {
+  position: absolute;
+  bottom: 1px;
+  right: 1px;
+  width: 16px;
+  height: 16px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  font-size: 0.55rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 1px 0 0;
+}
+
+@media (max-width: 1180px) {
+  .deck-layout {
+    grid-template-columns: 1fr;
+  }
+  .deck-search-panel {
+    position: static;
+    max-height: none;
+  }
+  .deck-main-grid {
+    grid-template-columns: repeat(8, 1fr);
+  }
+  .deck-search-grid {
+    grid-template-columns: repeat(auto-fill, minmax(78px, 1fr));
+  }
+}
+
 .hidden { display: none !important; }

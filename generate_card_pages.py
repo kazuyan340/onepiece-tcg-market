@@ -63,7 +63,7 @@ NAV_LINKS = [
 
 STATIC_PAGES = [
     "index.html", "trends.html", "movers-up.html", "movers-down.html",
-    "ranking.html", "compare.html", "goods.html", "about.html", "privacy.html",
+    "ranking.html", "compare.html", "goods.html", "deck.html", "about.html", "privacy.html",
 ]
 
 
@@ -79,7 +79,7 @@ def _json_script(data) -> str:
 
 def _nav_links_html() -> str:
     items = [f'<a href="{href}" class="nav-btn">{label}</a>' for href, label in NAV_LINKS]
-    items.append('<button type="button" class="nav-btn nav-btn-disabled" disabled title="準備中です">🃏 デッキ作成(準備中)</button>')
+    items.append('<a href="deck.html" class="nav-btn">🃏 デッキ作成</a>')
     items.append('<a href="goods.html" class="nav-btn">🛍️ グッズ</a>')
     return "\n      ".join(items)
 

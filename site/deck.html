@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="ワンピースカードゲームのデッキ(リーダー1枚・デッキ50枚)をカードを選びながら組み立て、現在の相場での合計金額をリアルタイムに確認できるツール。">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="ワンピースカードゲーム カード図鑑">
+<meta property="og:locale" content="ja_JP">
+<meta property="og:url" content="https://kazuyan340.github.io/onepiece-tcg-market/deck.html">
+<meta property="og:title" content="デッキ作成 | ワンピースカードゲーム カード図鑑">
+<meta property="og:description" content="ワンピースカードゲームのデッキ(リーダー1枚・デッキ50枚)をカードを選びながら組み立て、現在の相場での合計金額をリアルタイムに確認できるツール。">
+<meta property="og:image" content="https://kazuyan340.github.io/onepiece-tcg-market/ogp.png?v=1">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="デッキ作成 | ワンピースカードゲーム カード図鑑">
+<meta name="twitter:description" content="ワンピースカードゲームのデッキ(リーダー1枚・デッキ50枚)をカードを選びながら組み立て、現在の相場での合計金額をリアルタイムに確認できるツール。">
+<meta name="twitter:image" content="https://kazuyan340.github.io/onepiece-tcg-market/ogp.png?v=1">
+<title>デッキ作成 | ワンピースカードゲーム カード図鑑</title>
+<link rel="stylesheet" href="style.css?v=1">
+<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-9080305842487680" crossorigin="anonymous"></script>
+</head>
+<body>
+<header class="toolbar">
+  <div class="title-row">
+    <div class="title-block">
+      <h1>🃏 デッキ作成</h1>
+      <p id="last-updated" class="last-updated"></p>
+    </div>
+    <div class="nav-links">
+      <a href="index.html" class="nav-btn">📋 一覧</a>
+      <a href="trends.html" class="nav-btn">📊 価格の動きを見る</a>
+      <a href="movers-up.html" class="nav-btn">🔺 値上がりを見る</a>
+      <a href="movers-down.html" class="nav-btn">🔻 値下がりを見る</a>
+      <a href="ranking.html" class="nav-btn">💰 相場ランキング</a>
+      <a href="compare.html" class="nav-btn">★ お気に入り</a>
+      <a href="deck.html" class="nav-btn current-page">🃏 デッキ作成</a>
+      <a href="goods.html" class="nav-btn">🛍️ グッズ</a>
+    </div>
+    <button type="button" class="nav-menu-toggle" aria-label="メニュー" aria-expanded="false">☰</button>
+  </div>
+</header>
+
+<div class="deck-layout">
+  <!-- 左側: リーダー・デッキ(50枚)を常に表示。埋まっている枠はカード画像入りで
+       表示され、クリックで1枚減らせる。 -->
+  <main class="deck-main">
+    <div class="deck-summary">
+      <div class="deck-count" id="deck-count">デッキ 0/50枚</div>
+      <div class="deck-total" id="deck-total">合計 0円</div>
+      <label class="deck-total-toggle"><input type="checkbox" id="include-leader" checked> リーダーを含める</label>
+      <button type="button" id="clear-deck" class="reset-btn">デッキをクリア</button>
+      <button type="button" id="share-deck" class="reset-btn">🔗 URLで共有</button>
+      <button type="button" id="max-rarity-deck" class="reset-btn" title="同じカードの中で相場が一番高いレアリティに全部入れ替える">⬆️ 最高レアリティにする</button>
+      <button type="button" id="min-rarity-deck" class="reset-btn" title="同じカードの中で相場が一番安いレアリティに全部入れ替える">⬇️ 最低レアリティにする</button>
+    </div>
+
+    <div class="deck-top-slots">
+      <div class="deck-slot-section">
+        <h3>リーダー</h3>
+        <div id="deck-leader" class="deck-slot-box leader-slot empty"></div>
+      </div>
+      <div class="deck-slot-section deck-leader-info">
+        <h3>色の判定</h3>
+        <p id="color-legality-note" class="deck-hint deck-legality-note">リーダーを選ぶと、デッキに入れられる色が自動で判定されます。</p>
+      </div>
+    </div>
+
+    <h3>デッキ(キャラ・イベント・ステージ) <span class="deck-hint">枠をクリックすると右の一覧が絞り込まれます・埋まっている枠はクリックで1枚減らせます</span></h3>
+    <div class="sort-row">
+      <label for="deck-sort-select">並び順</label>
+      <select id="deck-sort-select">
+        <option value="name_asc">名前順</option>
+        <option value="name_desc">名前順(降順)</option>
+        <option value="card_num_asc">番号順</option>
+        <option value="card_num_desc">番号順(降順)</option>
+        <option value="cost_asc">コスト順</option>
+        <option value="cost_desc">コスト順(降順)</option>
+        <option value="power_asc">パワー順</option>
+        <option value="power_desc">パワー順(降順)</option>
+      </select>
+    </div>
+    <div id="deck-main-grid" class="deck-main-grid"></div>
+  </main>
+
+  <!-- 右側: カードの検索・選択パネル。タブでリーダー用/デッキ用を切り替え、
+       クリックしたカードはそのまま追加される。 -->
+  <aside class="deck-search-panel">
+    <div class="deck-zone-tabs">
+      <button type="button" class="site-tab deck-zone-tab" data-zone="leader">リーダーを探す</button>
+      <button type="button" class="site-tab deck-zone-tab active" data-zone="deck">デッキ用を探す</button>
+    </div>
+    <div class="filter-item">
+      <input type="text" id="keyword" placeholder="カード名で検索">
+    </div>
+    <div class="filters">
+      <details class="filter-group" id="filter-color-group">
+        <summary>色<span class="count-badge hidden"></span></summary>
+        <div class="checkbox-list" id="filter-color-list"></div>
+      </details>
+      <details class="filter-group" id="filter-rarity-group">
+        <summary>レアリティ<span class="count-badge hidden"></span></summary>
+        <div class="checkbox-list" id="filter-rarity-list"></div>
+      </details>
+      <details class="filter-group" id="filter-pack-group">
+        <summary>収録パック<span class="count-badge hidden"></span></summary>
+        <div class="checkbox-list" id="filter-pack-list"></div>
+      </details>
+    </div>
+    <div class="sort-row">
+      <label for="sort-select">並び替え</label>
+      <select id="sort-select">
+        <option value="id_asc">番号順</option>
+        <option value="id_desc">番号順(降順)</option>
+        <option value="cost_asc">コスト順</option>
+        <option value="cost_desc">コスト順(降順)</option>
+        <option value="power_asc">パワー順</option>
+        <option value="power_desc">パワー順(降順)</option>
+      </select>
+    </div>
+    <p id="result-count" class="result-count"></p>
+    <p class="deck-hint">カードをクリックで追加(色が合わないカードはブロックされます)</p>
+
+    <div id="card-grid" class="card-grid deck-search-grid"></div>
+  </aside>
+</div>
+
+<div id="modal-overlay" class="modal-overlay hidden">
+  <div class="modal-card">
+    <button id="modal-favorite" class="favorite-star modal-favorite-star" title="お気に入りに登録/解除">☆</button>
+    <button id="modal-close" class="modal-close">&times;</button>
+    <div class="modal-body">
+      <div class="modal-image">
+        <img id="modal-image" alt="">
+      </div>
+      <div class="modal-info" id="modal-info"></div>
+    </div>
+  </div>
+</div>
+
+<footer class="site-disclaimer">
+  <p>価格情報は当サイト調べです。実際の価格・在庫状況と差異が生じる場合があります。掲載しているカード画像はワンピースカードゲーム公式サイトの情報を参照しています。</p>
+  <p>デッキ構築ルール(リーダー1枚・デッキちょうど50枚・同一カード4枚まで・デッキ内カードはリーダーと色が1色以上一致する必要あり)は2024年時点の公式ルールに基づく当サイト独自の目安です。最新の公式ルール・禁止カードは公式サイトをご確認ください。</p>
+  <p><a href="about.html">運営者情報</a>　<a href="privacy.html">プライバシーポリシー・お問い合わせ</a></p>
+</footer>
+
+<script src="common.js?v=1"></script>
+<script src="deck.js?v=1"></script>
+</body>
+</html>
