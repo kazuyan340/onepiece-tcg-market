@@ -297,7 +297,7 @@ function statRow(label, value) {
 function createCardTile(card, pricesLatest, badgeHtml) {
   const priceInfo = pricesLatest[card.id];
   const priceBadge = priceInfo
-    ? `<div class="card-tile-price">¥${priceInfo.best.price.toLocaleString()}〜</div>`
+    ? `<div class="card-tile-price">${priceInfo.pooled_avg.toLocaleString()}円</div>`
     : "";
   const tile = document.createElement("button");
   tile.type = "button";
@@ -427,7 +427,7 @@ function setupChartHover(canvas, hitPoints) {
   canvas._chartHoverBound = true;
 
   const tooltip = getChartTooltip();
-  const HIT_RADIUS = 12;
+  const HIT_RADIUS = 10;
 
   canvas.addEventListener("mousemove", (e) => {
     const rect = canvas.getBoundingClientRect();
@@ -445,7 +445,7 @@ function setupChartHover(canvas, hitPoints) {
     }
 
     if (nearest) {
-      tooltip.textContent = `${nearest.date}: ¥${nearest.price.toLocaleString()}`;
+      tooltip.textContent = `${nearest.price.toLocaleString()}円 (${nearest.date})`;
       tooltip.style.left = `${e.clientX + 12}px`;
       tooltip.style.top = `${e.clientY + 12}px`;
       tooltip.style.display = "block";
